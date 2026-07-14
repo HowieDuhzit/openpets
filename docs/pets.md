@@ -150,7 +150,9 @@ working `setBounds` drag path is used. The backend-forcing itself lives in `main
 [desktop.md](desktop.md#linux-display-backend-ozonewayland), including the
 `OPENPETS_ALLOW_WAYLAND=1` opt-out (which restores native Wayland and therefore
 disables the motion/drag/always-on-top behavior above, with a one-time startup
-warning).
+warning). Hyprland users who need this compatibility mode should also apply the
+transparent-overlay compositor rules in
+[wayland.md](wayland.md#hyprland-native-wayland-setup).
 
 ## Installation
 

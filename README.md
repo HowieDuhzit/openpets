@@ -68,6 +68,11 @@ Download the package for your operating system from [OpenPets Releases](https://
 > xattr -dr com.apple.quarantine /Applications/OpenPets.app
 > ```
 
+> **Hyprland users:** OpenPets defaults to XWayland because native Wayland
+> restricts window positioning and always-on-top behavior. If the pet does not
+> appear under XWayland, use the native Wayland escape hatch and the compositor
+> rules in [docs/wayland.md](docs/wayland.md#hyprland-native-wayland-setup).
+
 ### 2. Manage and Customize Pets
 
 Browse installed pets, preview their animation frames, and configure which pet monitors each workspace or agent window from the built-in **Pet Gallery**.

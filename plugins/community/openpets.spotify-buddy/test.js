@@ -46,6 +46,11 @@ assert.ok(commandIds.includes("spotify-login"), "registers Spotify login command
 assert.ok(commandIds.includes("spotify-show-lyrics"), "registers lyrics command");
 assert.ok(h.calls.schedules.has("spotify-poll"), "schedules the polling loop");
 
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(h.calls.authRefreshes.length, 1, "checks for an existing Spotify session once at startup");
+await h.clock.advance("6s");
+assert.equal(h.calls.authRefreshes.length, 1, "does not retry a missing OAuth session on every poll");
+
 const login = h.calls.commands.get("spotify-login");
 assert.ok(login, "exposes OAuth login through a command");
 

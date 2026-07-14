@@ -149,9 +149,10 @@ delegates the pure decision to `computeEffectiveWaylandBackend()` in
 working `setBounds` drag path is used. The backend-forcing itself lives in `main.ts` and is documented in
 [desktop.md](desktop.md#linux-display-backend-ozonewayland), including the
 `OPENPETS_ALLOW_WAYLAND=1` opt-out (which restores native Wayland and therefore
-disables the motion/drag/always-on-top behavior above, with a one-time startup
-warning). Hyprland users who need this compatibility mode should also apply the
-transparent-overlay compositor rules in
+normally disables the motion/always-on-top behavior above, with a one-time
+startup warning). On Hyprland, the host uses compositor IPC for trusted window
+positioning, so movement plugins and gravity remain functional in native
+Wayland mode. Hyprland users should also apply the transparent-overlay rules in
 [wayland.md](wayland.md#hyprland-native-wayland-setup).
 
 ## Installation

@@ -18,6 +18,12 @@ function getElectron() {
   }
 }
 
+let windowPositionModule: any = null;
+function getWindowPositionModule() {
+  if (!windowPositionModule) windowPositionModule = require("./window-position.js");
+  return windowPositionModule;
+}
+
 // Lazy logger and appState loader to prevent execution of Electron imports under Node.js unit tests
 let loggerModule: any = null;
 function getLogger() {
@@ -693,6 +699,7 @@ async function createOrUpdateAirmailWindow(displayKey: string, activeItem: Queue
       stopWindowAnimation(displayKey);
 
       window = new BrowserWindow({
+        title: `OpenPets Airmail [${displayKey}]`,
         width,
         height,
         x: x_start,
@@ -801,9 +808,9 @@ async function createOrUpdateAirmailWindow(displayKey: string, activeItem: Queue
       await window.loadURL(targetUrl);
 
       if (window.isDestroyed() || getActiveItem()?.generationId !== activeItem.generationId) return;
-      window.setPosition(x_start, y_pos);
+      getWindowPositionModule().setWindowPosition(window, x_start, y_pos);
       window.showInactive();
-      const [visibleXStart, visibleYStart] = window.getPosition();
+      const { x: visibleXStart, y: visibleYStart } = getWindowPositionModule().getWindowPosition(window);
       logDebug("ui", "delivery flight starts from visible window position", { displayKey, requestedXStart: x_start, requestedYStart: y_pos, visibleXStart, visibleYStart, xEnd: x_end });
       if (!window.webContents.isDestroyed()) {
         window.webContents.send("openpets:pet-reaction-state", "running-left");
@@ -831,7 +838,7 @@ async function createOrUpdateAirmailWindow(displayKey: string, activeItem: Queue
         const t = easeLinear(progress);
         const x = Math.round(visibleXStart + (x_end - visibleXStart) * t);
 
-        window.setPosition(x, visibleYStart);
+        getWindowPositionModule().setWindowPosition(window, x, visibleYStart);
 
         if (progress >= 1) {
           clearInterval(animTimer);
@@ -860,7 +867,7 @@ async function createOrUpdateAirmailWindow(displayKey: string, activeItem: Queue
       await window.loadURL(targetUrl);
       if (window.isDestroyed() || getActiveItem()?.generationId !== activeItem.generationId) return;
       // Set straight to parked/waiting if we did an in-place update
-      window.setPosition(x_end, y_pos);
+      getWindowPositionModule().setWindowPosition(window, x_end, y_pos);
       window.webContents.send("openpets:pet-reaction-state", "waiting");
     }
   } catch (err) {

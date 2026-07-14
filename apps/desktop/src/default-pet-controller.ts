@@ -12,6 +12,7 @@ import { PetBubbleArbiter, type ActiveBubble, type PetBubbleSink } from "./plugi
 import { publishPluginPetEvent } from "./plugin-events-source.js";
 import { reclampAgentPetWindows } from "./agent-pet-controller.js";
 import { reclampPluginPetWindows } from "./plugin-pet-registry.js";
+import { setWindowPosition } from "./window-position.js";
 
 let defaultPetWindow: BrowserWindow | null = null;
 let paused = false;
@@ -388,10 +389,10 @@ async function moveDefaultPetBy(rawX: number, rawY: number, rawDurationMs: unkno
       const blocked = getMovementBlockedReason(window, true);
       if (blocked) return { moved: false, reason: blocked };
       const t = step / steps;
-      window.setPosition(Math.round(current.x + (target.x - current.x) * t), Math.round(current.y + (target.y - current.y) * t), false);
+      setWindowPosition(window, Math.round(current.x + (target.x - current.x) * t), Math.round(current.y + (target.y - current.y) * t));
       await delay(durationMs / steps);
     }
-    window.setPosition(target.x, target.y, false);
+    setWindowPosition(window, target.x, target.y);
     handlePositionChanged(target);
     debug("pet.default", "move finished", { windowId: window.id, target });
     return { moved: true };
@@ -489,7 +490,7 @@ function reclampDefaultPetWindow(reason: DisplayChangeReason, changedDisplay?: D
     : getSafeDefaultPetPosition(currentPosition);
 
   info("pet.default", "reclamp position", { windowId: defaultPetWindow.id, position: safePosition, restored: Boolean(restoredPosition), reason, changedDisplayKey });
-  defaultPetWindow.setPosition(safePosition.x, safePosition.y, false);
+  setWindowPosition(defaultPetWindow, safePosition.x, safePosition.y);
   handlePositionChanged(safePosition);
   recoverDefaultPetMouseInterop("display-change");
 }
@@ -514,6 +515,6 @@ export function resetDefaultPetToInitialPosition(): void {
   resetDefaultPetPosition(safePosition);
 
   if (defaultPetWindow && !defaultPetWindow.isDestroyed()) {
-    defaultPetWindow.setPosition(safePosition.x, safePosition.y, false);
+    setWindowPosition(defaultPetWindow, safePosition.x, safePosition.y);
   }
 }

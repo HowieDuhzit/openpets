@@ -118,6 +118,7 @@ export interface MockCalls {
   openedExternal: string[];
   clipboardWrites: string[];
   spawnedPets: string[];
+  authRefreshes: string[];
   panelMessages: unknown[];
   savedFiles: Array<{ suggestedName: string; data: string | Uint8Array }>;
   secrets: Map<string, string>;
@@ -310,7 +311,7 @@ export function createMockContext(optionsOrConfig: MockContextOptions | Record<s
   const calls: MockCalls = {
     speak: [], react: [], reactions: [], statusReactions: [], status: [], storage: new Map(), schedules: new Map(), commands: new Map(), menuItems: [],
     bubbles: [], alerts: [], deliveries: [], dismissedBubbles: [], toasts: [], notifications: [], sounds: [], importedUserSounds: [], forgottenUserSounds: [], busPublishes: [], netCalls: [],
-    aiCalls: [], voiceSpeaks: [], openedExternal: [], clipboardWrites: [], spawnedPets: [], panelMessages: [],
+    aiCalls: [], voiceSpeaks: [], openedExternal: [], clipboardWrites: [], spawnedPets: [], authRefreshes: [], panelMessages: [],
     savedFiles: [], secrets: new Map(), errors: [],
   };
   const clock = new FakeClock(options.nowMs ?? Date.now(), calls.schedules, (message) => calls.errors.push(message));
@@ -620,7 +621,7 @@ export function createMockContext(optionsOrConfig: MockContextOptions | Record<s
     },
     auth: {
       oauth: async () => { requirePermission("auth"); if (!authTokens) throw new Error("No auth mock — call harness.auth.mock(...) first."); return { ...authTokens }; },
-      refresh: async () => { requirePermission("auth"); if (!authTokens) throw new Error("No auth mock — call harness.auth.mock(...) first."); return { accessToken: authTokens.accessToken, expiresAt: authTokens.expiresAt }; },
+      refresh: async (provider) => { requirePermission("auth"); calls.authRefreshes.push(provider); if (!authTokens) throw new Error(`No stored OAuth session for provider: ${provider}`); return { accessToken: authTokens.accessToken, expiresAt: authTokens.expiresAt }; },
       signOut: async () => { requirePermission("auth"); authTokens = null; },
     },
     files: {

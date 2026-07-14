@@ -47,6 +47,40 @@ without breaking plugin bubbles that need typed input, but it does not change th
 accepted native Wayland limitations around cross-workspace stickiness or
 compositor-controlled window placement.
 
+## Hyprland native Wayland setup
+
+OpenPets defaults to XWayland on Linux because that backend permits the window
+positioning and z-order operations used by pet motion. On Hyprland, an XWayland
+pet may not appear on some systems. Native Wayland can be enabled explicitly by
+launching OpenPets with `OPENPETS_ALLOW_WAYLAND=1` and
+`--ozone-platform=wayland`. For a desktop entry, prefix its `Exec` command with
+the environment variable and append the Ozone argument.
+
+Hyprland themes may blur transparent windows by default. That makes the pet's
+otherwise transparent surface appear as a translucent rectangle. Match the
+OpenPets window class in the user Hyprland config and disable compositor blur,
+shadow, and decorations:
+
+```ini
+windowrule = decorate off, match:class open-pets-desktop
+windowrule = border_size 0, match:class open-pets-desktop
+windowrule = rounding 0, match:class open-pets-desktop
+windowrule = no_shadow on, match:class open-pets-desktop
+windowrule = no_blur on, match:class open-pets-desktop
+windowrule = float on, match:class open-pets-desktop
+windowrule = pin on, match:class open-pets-desktop
+```
+
+This syntax is validated against Hyprland 0.55. After editing the config, run
+`hyprctl reload` and `hyprctl configerrors`; the latter should produce no
+output. Restart OpenPets so static window rules are applied to a newly created
+pet window.
+
+Native Wayland remains an opt-in compatibility mode. The compositor controls
+global placement and stacking, so gravity, walkabout, follow-cursor,
+cross-display roaming, and always-on-top behavior may not work as they do under
+XWayland.
+
 ## Reproduction and validation notes
 
 The KDE Wayland repro VM lives at:

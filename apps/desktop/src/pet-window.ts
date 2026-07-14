@@ -19,6 +19,7 @@ import { defaultPetSprite, motionToSpriteState, resolveReactionSpriteState, type
 import { isFocusActionAvailable } from "./capabilities.js";
 import { canForwardMouseEvents as platformCanForwardMouseEvents, shouldWatchForwardedMouseEvents } from "./mouse-forwarding.js";
 import { computeEffectiveWaylandBackend, shouldPetWindowBeFocusable } from "./wayland-backend.js";
+import { getWindowPosition, isHyprlandWindowPositioningAvailable, setWindowPosition } from "./window-position.js";
 
 export interface PetWindowInteractionHooks {
   readonly onBubbleDismissed?: (dismissToken: string) => void;
@@ -661,10 +662,22 @@ function createBasePetWindow(title: string, position: Point, focusOptions: { rea
     },
   });
 
+  if (isHyprlandWindowPositioningAvailable()) {
+    window.setTitle(`${title} [${window.id}]`);
+    window.on("page-title-updated", (event) => event.preventDefault());
+  }
+
   petWindowFocusPolicy.set(window, focusable);
   window.setMenu(null);
   applyPetAlwaysOnTop(window);
-  window.on("show", () => applyPetAlwaysOnTop(window));
+  let initialPositionPending = true;
+  window.on("show", () => {
+    applyPetAlwaysOnTop(window);
+    if (initialPositionPending) {
+      initialPositionPending = false;
+      setWindowPosition(window, position.x, position.y);
+    }
+  });
   window.on("restore", () => applyPetAlwaysOnTop(window));
 
   // Windows silently strips HWND_TOPMOST from other windows when an app
@@ -886,7 +899,7 @@ export function getSafeDefaultPetPosition(position: Point | undefined): Point {
 }
 
 export function readWindowPosition(window: BrowserWindow): Point {
-  const [x, y] = window.getPosition();
+  const { x, y } = getWindowPosition(window);
   if (isCrossDisplayRoamingEnabled()) return clampToNearestDisplayIfOffscreen({ x, y }, defaultPetWindowSize);
   return clampToVisibleWorkArea({ x, y }, defaultPetWindowSize);
 }
@@ -1478,7 +1491,7 @@ function escapeCssUrl(value: string): string {
 }
 
 function installMotionStatePublisher(window: BrowserWindow): void {
-  let lastX = window.getPosition()[0];
+  let lastX = getWindowPosition(window).x;
   let lastSent: PetMotionState = "idle";
   let idleTimer: NodeJS.Timeout | null = null;
 
@@ -1498,7 +1511,7 @@ function installMotionStatePublisher(window: BrowserWindow): void {
 
   const handleMove = (): void => {
     if (window.isDestroyed()) return;
-    const [x] = window.getPosition();
+    const { x } = getWindowPosition(window);
     const deltaX = x - lastX;
     lastX = x;
 

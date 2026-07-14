@@ -8,6 +8,7 @@ import { debug, info } from "./logger.js";
 import { transientDisplayMs, type OpenPetsReaction } from "./local-ipc-protocol.js";
 import { clearTransientReaction, createAgentPetWindow, getTransientDisplayDurationMs, getTransientReactionAnimationMs, loadExplicitPetContent, mergePetTransientDisplay, readWindowPosition, setPetReactionState, type PetShowMediaOptions, type PetStatusBadgeReaction, type PetTransientDisplay } from "./pet-window.js";
 import { focusTerminalWindow } from "./terminal-focus.js";
+import { getWindowPosition, setWindowPosition } from "./window-position.js";
 
 const agentPetWindows = new Map<string, BrowserWindow>();
 const transientDisplays = new Map<string, PetTransientDisplay>();
@@ -47,11 +48,11 @@ export function repositionConfinedPet(petId: string, win?: BrowserWindow): void 
   if (!confinementBounds) return;
   const window = win ?? agentPetWindows.get(petId);
   if (!window || window.isDestroyed()) return;
-  const [cx, cy] = window.getPosition();
+  const { x: cx, y: cy } = getWindowPosition(window);
   const clamped = clampToTerminalBounds({ x: cx, y: cy }, defaultPetWindowSize, confinementBounds);
   if (clamped.x !== cx || clamped.y !== cy) {
     debug("pet.agent", "reposition confined", { petId, from: { x: cx, y: cy }, to: clamped });
-    window.setPosition(clamped.x, clamped.y, false);
+    setWindowPosition(window, clamped.x, clamped.y);
   }
 }
 
@@ -139,10 +140,10 @@ export function reclampAgentPetWindows(): void {
   for (const [petId, window] of agentPetWindows.entries()) {
     if (!window || window.isDestroyed()) continue;
     const safePosition = readWindowPosition(window);
-    const [currentX, currentY] = window.getPosition();
+    const { x: currentX, y: currentY } = getWindowPosition(window);
     if (safePosition.x !== currentX || safePosition.y !== currentY) {
       info("pet.agent", "reclamp position", { petId, windowId: window.id, from: { x: currentX, y: currentY }, to: safePosition });
-      window.setPosition(safePosition.x, safePosition.y, false);
+      setWindowPosition(window, safePosition.x, safePosition.y);
     }
   }
 }

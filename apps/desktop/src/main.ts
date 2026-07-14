@@ -19,6 +19,7 @@ import { initializePluginService } from "./plugin-service.js";
 import { createAppTray, refreshTrayMenu } from "./tray.js";
 import { checkForGitHubReleaseUpdate } from "./update-checker.js";
 import { installInternalUiHandlers, installInternalUiProtocol } from "./windows.js";
+import { isHyprlandWindowPositioningAvailable } from "./window-position.js";
 
 // OpenPets does not store browser passwords, cookies, or encrypted app secrets.
 // Keep Chromium/Electron from prompting for macOS Keychain or Linux keyring access
@@ -40,8 +41,9 @@ if (process.platform === "win32") {
 // native Wayland compositors disallow for XDG-shell toplevels. To ensure
 // gravity, drag, and always-on-top work correctly on all KDE/GNOME Linux
 // desktops, we force the x11/XWayland backend. Users who explicitly need
-// native Wayland can set OPENPETS_ALLOW_WAYLAND=1, but gravity, walkabout,
-// and manual drag will not function under native Wayland.
+// native Wayland can set OPENPETS_ALLOW_WAYLAND=1. Hyprland sessions regain
+// host-driven movement through the compositor IPC adapter; other native
+// Wayland compositors still cannot provide gravity or walkabout movement.
 const isLinux = process.platform === "linux";
 const allowWayland = process.env.OPENPETS_ALLOW_WAYLAND === "1";
 const hasExplicitOzonePlatformArg = process.argv.some(
@@ -73,7 +75,11 @@ if (!gotSingleInstanceLock) {
     info("app", "startup begin", { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, pid: process.pid, ozonePlatform: app.commandLine.getSwitchValue("ozone-platform") || null, explicitOzonePlatformArg: hasExplicitOzonePlatformArg });
     if (isLinux && allowWayland) {
       const effectiveOzone = app.commandLine.getSwitchValue("ozone-platform") || "(auto/system)";
-      warn("app", "native Wayland mode active — pet positioning, gravity, walkabout, and drag are unsupported under native Wayland; remove OPENPETS_ALLOW_WAYLAND=1 to restore full functionality", { effectiveOzone });
+      if (isHyprlandWindowPositioningAvailable()) {
+        warn("app", "native Wayland mode active with Hyprland positioning support; compositor rules are still required for transparent, pinned pet windows", { effectiveOzone });
+      } else {
+        warn("app", "native Wayland mode active — pet positioning, gravity, walkabout, and drag are unsupported under native Wayland; remove OPENPETS_ALLOW_WAYLAND=1 to restore full functionality", { effectiveOzone });
+      }
     }
 
     if (process.platform === "darwin") {

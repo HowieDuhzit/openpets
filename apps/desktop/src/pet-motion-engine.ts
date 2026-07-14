@@ -4,6 +4,7 @@ import type { BrowserWindow } from "electron";
 
 import { clampToTerminalBounds, getEffectiveConfinementBounds } from "./confinement-manager.js";
 import { clampToNearestDisplayIfOffscreen, clampToVisibleWorkArea, defaultPetWindowSize, isCrossDisplayRoamingEnabled, type Point } from "./display.js";
+import { getWindowPosition, setWindowPosition } from "./window-position.js";
 // isPetWindowDragging is lazily loaded via _setIsPetWindowDraggingForTesting seam
 
 // ---------------------------------------------------------------------------
@@ -172,7 +173,7 @@ export async function motionMoveTo(petHandleId: string, accessor: WindowAccessor
   // in MotionState and let syncLoop handle interpolation. This avoids the
   // competing-writer race that causes jitter.
   if (state.follow !== null || state.physics !== null) {
-    const [startX, startY] = window.getPosition();
+    const { x: startX, y: startY } = getWindowPosition(window);
     const clamped = clampPosition(petHandleId, target);
     state.moveTarget = { x: clamped.x, y: clamped.y, startX, startY, elapsed: 0, durationMs, easing };
     // Return a promise that resolves when the generation changes (move completes or is superseded).
@@ -186,7 +187,7 @@ export async function motionMoveTo(petHandleId: string, accessor: WindowAccessor
   }
 
   // No continuous loop — drive it ourselves (legacy step loop).
-  const [startX, startY] = window.getPosition();
+  const { x: startX, y: startY } = getWindowPosition(window);
   const clamped = clampPosition(petHandleId, target);
   const steps = Math.max(4, Math.round(durationMs / 33));
   for (let step = 1; step <= steps; step += 1) {
@@ -196,7 +197,7 @@ export async function motionMoveTo(petHandleId: string, accessor: WindowAccessor
     const nextX = Math.round(startX + (clamped.x - startX) * t);
     const nextY = Math.round(startY + (clamped.y - startY) * t);
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;  // abort move if NaN (e.g. startX was NaN from mid-destroy getPosition)
-    live.setPosition(nextX, nextY, false);
+    setWindowPosition(live, nextX, nextY);
     await delay(durationMs / steps);
   }
 }
@@ -258,7 +259,7 @@ function tickPet(petHandleId: string, accessor: WindowAccessor, state: MotionSta
     }
     return;
   }
-  const [x, y] = window.getPosition();
+  const { x, y } = getWindowPosition(window);
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     // Native position is unavailable/NaN (mid-destroy race or monitor disconnect).
     // We cannot write a position this tick, but we still settle the move-to clock
@@ -335,7 +336,7 @@ function tickPet(petHandleId: string, accessor: WindowAccessor, state: MotionSta
   if (nextX !== x || nextY !== y) {
     const clamped = clampPosition(petHandleId, { x: nextX, y: nextY });
     if (!Number.isFinite(clamped.x) || !Number.isFinite(clamped.y)) return;  // skip write when clamp produces NaN (e.g. from NaN workArea on monitor disconnect)
-    window.setPosition(clamped.x, clamped.y, false);
+    setWindowPosition(window, clamped.x, clamped.y);
   }
 }
 

@@ -54,9 +54,12 @@ mistaken launch flag cannot disable pet movement.
 
 The escape hatch is the environment variable `OPENPETS_ALLOW_WAYLAND=1`: when
 set, the app honors the system default backend (or an explicit
-`--ozone-platform`) and emits a one-time `warn("app", ...)` at startup (after the
-startup-begin log) stating that positioning, gravity, walkabout, and drag are
-unsupported under native Wayland and how to restore full functionality. The
+`--ozone-platform`). Generic native Wayland sessions emit a one-time warning
+that autonomous positioning is unsupported. Hyprland sessions instead use the
+compositor IPC adapter in `window-position.ts`, which resolves OpenPets windows
+by process and title, coalesces movement writes, and keeps a logical position
+for motion and plugin state. This restores gravity, Walkabout, Airmail, and
+reclamping while keeping compositor access inside the trusted host. The
 pet-drag path keys off this same effective backend via
 `isEffectiveWaylandBackend()` in `pet-window.ts`, which is evaluated at
 window-creation time (after the switch is applied) and cached. The pure backend
@@ -66,6 +69,8 @@ is factored into `computeEffectiveWaylandBackend()` in `wayland-backend.ts`;
 
 The x11-forcing branch and the `OPENPETS_ALLOW_WAYLAND` opt-out are asserted by
 `check-packaging-contract.ts`, so this behavior cannot silently regress.
+Hyprland still requires the transparent/pinned window rules documented in
+[wayland.md](wayland.md#hyprland-native-wayland-setup).
 
 On Windows, the shell silently strips `HWND_TOPMOST` from other windows when an
 app enters fullscreen (browser video, games) and never restores it — and no

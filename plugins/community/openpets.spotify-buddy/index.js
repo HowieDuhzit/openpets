@@ -19,6 +19,7 @@ let scheduleWallBase = null;
 let scheduleProgressBase = null;
 let spotifyAccessToken = null;
 let spotifyExpiresAt = 0;
+let spotifyNeedsLogin = false;
 
 // ─── Text helpers ─────────────────────────────────────────────────────────────
 
@@ -179,6 +180,7 @@ async function loginSpotify(ctx) {
     });
     spotifyAccessToken = tokens.accessToken;
     spotifyExpiresAt = tokens.expiresAt || 0;
+    spotifyNeedsLogin = false;
     
     await ctx.pet.speak("Successfully connected to Spotify!");
     await ctx.pet.react("celebrating");
@@ -200,6 +202,9 @@ async function refreshAccessToken(ctx) {
     spotifyExpiresAt = tokens.expiresAt || 0;
     return spotifyAccessToken;
   } catch (e) {
+    const authError = String(e?.message || "");
+    const permanentAuthFailure = e?.code === "invalid_grant" || authError.includes("No stored OAuth session") || authError.includes("has no refresh token");
+    spotifyNeedsLogin = permanentAuthFailure;
     if (e?.code === "invalid_grant") {
       await ctx.auth.signOut("spotify");
       spotifyAccessToken = null;
@@ -211,6 +216,7 @@ async function refreshAccessToken(ctx) {
 }
 
 async function getValidToken(ctx) {
+  if (spotifyNeedsLogin) return null;
   if (!spotifyAccessToken || Date.now() > spotifyExpiresAt - 60000) {
     spotifyAccessToken = await refreshAccessToken(ctx);
   }

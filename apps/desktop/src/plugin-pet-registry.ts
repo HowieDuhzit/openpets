@@ -12,6 +12,7 @@ import { PetBubbleArbiter, type PetBubbleSink } from "./plugin-bubble-arbiter.js
 import { publishPluginPetEvent } from "./plugin-events-source.js";
 import { resolveReactionSpriteState } from "./reaction-animation-mapping.js";
 import type { PluginAnimationSpec, PluginPetInfo, PluginPetState } from "./plugin-sdk-bridge.js";
+import { getWindowPosition, setWindowPosition } from "./window-position.js";
 
 /**
  * Multi-pet registry (§4): addressable pet handles for plugins. "default" is
@@ -239,7 +240,7 @@ export function setPluginPetStatusReaction(petHandleId: string, reaction: OpenPe
 
 export async function movePluginPetBy(petHandleId: string, opts: { x: number; y: number; durationMs?: number }): Promise<void> {
   const window = requireWindow(petHandleId);
-  const [x, y] = window.getPosition();
+  const { x, y } = getWindowPosition(window);
   const distance = Math.min(Math.hypot(opts.x, opts.y), 160);
   const scale = distance > 0 ? distance / Math.hypot(opts.x, opts.y) : 0;
   await motionMoveTo(petHandleId, windowAccessor(petHandleId), { x: x + opts.x * scale, y: y + opts.y * scale }, { durationMs: opts.durationMs ?? 700 });
@@ -273,7 +274,7 @@ export function setPluginPetPhysics(petHandleId: string, opts: { gravity?: boole
 
 export function getPluginPetState(petHandleId: string): PluginPetState {
   const window = requireWindow(petHandleId);
-  const [x, y] = window.getPosition();
+  const { x, y } = getWindowPosition(window);
   const [width, height] = window.getSize();
   const pet = spawnedPets.get(petHandleId);
   return {
@@ -330,9 +331,9 @@ export function reclampPluginPetWindows(): void {
   for (const pet of spawnedPets.values()) {
     const { window } = pet;
     if (!window || window.isDestroyed()) continue;
-    const [cx, cy] = window.getPosition();
+    const { x: cx, y: cy } = getWindowPosition(window);
     const safe = readWindowPosition(window);
-    if (safe.x !== cx || safe.y !== cy) window.setPosition(safe.x, safe.y, false);
+    if (safe.x !== cx || safe.y !== cy) setWindowPosition(window, safe.x, safe.y);
   }
 }
 

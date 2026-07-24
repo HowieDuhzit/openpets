@@ -76,6 +76,21 @@ This syntax is validated against Hyprland 0.55. After editing the config, run
 output. Restart OpenPets so static window rules are applied to a newly created
 pet window.
 
+Keep GPU acceleration enabled when using this native Wayland path. A local
+source launch can be validated with:
+
+```bash
+OPENPETS_ALLOW_WAYLAND=1 pnpm --dir apps/desktop exec electron --ozone-platform=wayland .
+```
+
+On hybrid-GPU systems, Chromium may crash its GPU process when OpenPets is
+forced through XWayland even though the native Wayland renderer is stable. If
+the app appears in the taskbar but no pet or Control Center is painted, check
+the log for `GPU process exited unexpectedly`, confirm the process is using
+`--ozone-platform=wayland`, and apply the rules above. `--disable-gpu` is useful
+only as a diagnostic fallback; it is not required for normal native Wayland
+operation.
+
 When this mode is active on Hyprland, the desktop host routes trusted position
 writes through Hyprland IPC instead of Electron's ignored Wayland
 `setPosition()` call. Walkabout, gravity, follow-cursor, pet-state coordinates,

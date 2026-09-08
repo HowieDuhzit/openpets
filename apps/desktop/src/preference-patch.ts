@@ -18,6 +18,8 @@ export type PreferencePatch = {
   petConfinementEnabled?: boolean;
   petCrossDisplayEnabled?: boolean;
   petGravityEnabled?: boolean;
+  hideDefaultPetOnFullscreen?: boolean;
+  followActiveMonitor?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,6 +61,16 @@ export function validatePreferencePatch(value: unknown): PreferencePatch {
   if ("petCrossDisplayEnabled" in value) {
     if (typeof value.petCrossDisplayEnabled !== "boolean") throw new Error("Invalid pet-cross-display-enabled value.");
     patch.petCrossDisplayEnabled = value.petCrossDisplayEnabled;
+  }
+
+  if ("hideDefaultPetOnFullscreen" in value) {
+    if (typeof value.hideDefaultPetOnFullscreen !== "boolean") throw new Error("Invalid fullscreen-hide value.");
+    patch.hideDefaultPetOnFullscreen = value.hideDefaultPetOnFullscreen;
+  }
+
+  if ("followActiveMonitor" in value) {
+    if (typeof value.followActiveMonitor !== "boolean") throw new Error("Invalid active-monitor-follow value.");
+    patch.followActiveMonitor = value.followActiveMonitor;
   }
 
   if ("locale" in value) {

@@ -61,6 +61,10 @@ const behaviorTests = [
   ".test-dist/tests/preference-patch.test.js",
   ".test-dist/tests/plugin-agent-activity.test.js",
   ".test-dist/tests/pet-window-wayland-predicate.test.js",
+  ".test-dist/tests/linux-environment.test.js",
+  ".test-dist/tests/omarchy-setup.test.js",
+  ".test-dist/tests/omarchy-context-core.test.js",
+  ".test-dist/tests/app-actions.test.js",
   ".test-dist/tests/pet-window-mouse-forwarding-predicate.test.js",
   ".test-dist/tests/window-position.test.js",
 ];

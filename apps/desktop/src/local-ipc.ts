@@ -20,12 +20,15 @@ import { findTerminalWindowForPid, subscribeWindowTracking, type TerminalWindowI
 import { warnPetFallback } from "./pet-fallback-notify.js";
 import { getEligiblePoolPetIds, resolvePoolAssignment } from "./pet-pool.js";
 import { t } from "./i18n/index.js";
+import { publishAppStatusChanged, subscribeAppStatusChanged } from "./app-status-events.js";
 
 let ipcServer: net.Server | null = null;
 let ipcDiscovery: OpenPetsDiscoveryFile | null = null;
 let leaseCleanupTimer: NodeJS.Timeout | null = null;
 /** leaseId → window-tracking unsubscribe function (for confined agent pets). */
 const confinementUnsubscribers = new Map<string, () => void>();
+const statusSubscribers = new Map<net.Socket, { readonly requestId: string; lastResult: string }>();
+let unsubscribeStatusChanges: (() => void) | null = null;
 const leaseManager = new LeaseManager({
   resolveTarget: resolveLeaseTarget,
   getDefaultPetId: () => getCurrentDefaultPet().id,
@@ -72,6 +75,7 @@ export async function startLocalIpcServer(): Promise<void> {
   ipcServer = server;
   const listeningEndpoint = getListeningEndpoint(server, endpointConfig);
   ipcDiscovery = writeDiscoveryFile(listeningEndpoint, token);
+  unsubscribeStatusChanges = subscribeAppStatusChanged(broadcastStatus);
   leaseCleanupTimer = setInterval(() => {
     cleanupReleasedLeases(leaseManager.cleanupExpired());
     cleanupReleasedLeases(leaseManager.checkPidLiveness());
@@ -89,6 +93,10 @@ export function stopLocalIpcServer(): void {
   info("ipc", "server stopping", { hadServer: Boolean(server), discoveryPath: discovery ? getDiscoveryFilePath() : undefined, endpoint: discovery?.endpoint });
   if (leaseCleanupTimer) clearInterval(leaseCleanupTimer);
   leaseCleanupTimer = null;
+  unsubscribeStatusChanges?.();
+  unsubscribeStatusChanges = null;
+  for (const socket of statusSubscribers.keys()) socket.end();
+  statusSubscribers.clear();
   removeDiscoveryFile(discovery);
 
   if (server) {
@@ -135,6 +143,7 @@ export function dispatchPoolToggle(enabled: boolean): void {
       }
     }
   }
+  publishAppStatusChanged();
 }
 
 function handleSocket(socket: net.Socket, token: string, endpointConfig: IpcEndpointConfig): void {
@@ -169,14 +178,16 @@ function handleSocket(socket: net.Socket, token: string, endpointConfig: IpcEndp
 
     handled = true;
     const raw = buffer.slice(0, newline);
-    void handleRawRequest(raw, token).then((response) => writeResponse(socket, response));
+    void handleRawSocketRequest(raw, token, socket);
   });
 
   socket.on("error", (error) => {
+    statusSubscribers.delete(socket);
     if (isBenignSocketCloseError(error)) return;
     logError("ipc", "client socket error", error);
     console.error("OpenPets local IPC client socket error.", error);
   });
+  socket.on("close", () => statusSubscribers.delete(socket));
 }
 
 function listenOnEndpoint(server: net.Server, endpoint: IpcEndpoint, callback: () => void): void {
@@ -275,6 +286,22 @@ async function handleRawRequest(raw: string, token: string) {
   }
 }
 
+async function handleRawSocketRequest(raw: string, token: string, socket: net.Socket): Promise<void> {
+  try {
+    const request = parseIpcRequest(raw, token);
+    if (request.method === "status.subscribe") {
+      debug("ipc", "status subscriber connected", { requestId: request.id });
+      socket.setTimeout(0);
+      statusSubscribers.set(socket, { requestId: request.id, lastResult: "" });
+      writeStatusSubscriber(socket);
+      return;
+    }
+  } catch {
+    // The regular request path returns a protocol-safe error response.
+  }
+  writeResponse(socket, await handleRawRequest(raw, token));
+}
+
 async function handleRequest(request: OpenPetsIpcRequest): Promise<unknown> {
   if (request.method === "hello") {
     return {
@@ -293,24 +320,7 @@ async function handleRequest(request: OpenPetsIpcRequest): Promise<unknown> {
       if (!lease) return createStaleLeaseStatus(leaseId);
       return { ok: true, appRunning: true, ...lease };
     }
-    const state = getAppStateSnapshot();
-    const defaultPet = state.pets.installed.find((pet) => pet.id === state.preferences.defaultPetId) ?? builtInPet;
-    return {
-      ok: true,
-      appRunning: true,
-      protocolVersion: 1,
-      appVersion: ipcDiscovery?.appVersion ?? "0.0.0",
-      defaultPet: {
-        id: defaultPet.id,
-        displayName: defaultPet.displayName,
-        builtIn: defaultPet.builtIn,
-        broken: "broken" in defaultPet && defaultPet.broken === true,
-      },
-      paused: getDefaultPetPaused(),
-      defaultPetVisible: isDefaultPetVisible(),
-      openDefaultPetOnLaunch: state.preferences.openDefaultPetOnLaunch,
-      speechBubblesEnabled: state.preferences.speechBubblesEnabled,
-    };
+    return getAppStatusSnapshot();
   }
 
   if (request.method === "pets.list") {
@@ -361,6 +371,7 @@ async function handleRequest(request: OpenPetsIpcRequest): Promise<unknown> {
     const sessionNonce = validateSessionNonce(params.sessionNonce);
     debug("ipc", "lease acquire requested", { requestId: request.id, requestedPetId, clientPid, sessionNonce });
     const lease = leaseManager.acquire(requestedPetId, clientPid, sessionNonce);
+    publishAppStatusChanged();
     warnPetFallback(requestedPetId, lease.fallbackReason, warnedFallbackPets);
     // Resolve terminal window identity asynchronously (non-blocking).
     // Only attempt on macOS where window-bounds polling is supported.
@@ -390,7 +401,9 @@ async function handleRequest(request: OpenPetsIpcRequest): Promise<unknown> {
     if (rawLease?.targetKind === "explicit") {
       return releaseExplicitLease(leaseId);
     }
-    return leaseManager.release(leaseId);
+    const released = leaseManager.release(leaseId);
+    if (released.released) publishAppStatusChanged();
+    return released;
   }
 
   if (request.method === "pet.react") {
@@ -485,11 +498,14 @@ function cleanupReleasedLeases(leases: readonly { readonly leaseId: string; read
   for (const lease of leases) {
     if (lease.targetKind === "explicit") unsubscribeConfinement(lease.leaseId);
   }
+  if (leases.length > 0) publishAppStatusChanged();
 }
 
 function releaseExplicitLease(leaseId: string): { readonly released: boolean } {
   unsubscribeConfinement(leaseId);
-  return leaseManager.release(leaseId);
+  const released = leaseManager.release(leaseId);
+  if (released.released) publishAppStatusChanged();
+  return released;
 }
 
 async function resolveTerminalIdentity(leaseId: string, clientPid: number): Promise<void> {
@@ -587,6 +603,43 @@ function unsubscribeConfinement(leaseId: string): void {
 function writeResponse(socket: net.Socket, response: unknown): void {
   if (socket.destroyed || !socket.writable) return;
   socket.end(`${JSON.stringify(response)}\n`);
+}
+
+function getAppStatusSnapshot() {
+  const state = getAppStateSnapshot();
+  const defaultPet = state.pets.installed.find((pet) => pet.id === state.preferences.defaultPetId) ?? builtInPet;
+  return {
+    ok: true,
+    appRunning: true,
+    protocolVersion: 1,
+    appVersion: ipcDiscovery?.appVersion ?? "0.0.0",
+    defaultPet: {
+      id: defaultPet.id,
+      displayName: defaultPet.displayName,
+      builtIn: defaultPet.builtIn,
+      broken: "broken" in defaultPet && defaultPet.broken === true,
+    },
+    paused: getDefaultPetPaused(),
+    defaultPetVisible: isDefaultPetVisible(),
+    openDefaultPetOnLaunch: state.preferences.openDefaultPetOnLaunch,
+    speechBubblesEnabled: state.preferences.speechBubblesEnabled,
+    activeAgentCount: leaseManager.getActiveLeaseCount(),
+  };
+}
+
+function broadcastStatus(): void {
+  for (const socket of statusSubscribers.keys()) writeStatusSubscriber(socket);
+}
+
+function writeStatusSubscriber(socket: net.Socket): void {
+  const subscriber = statusSubscribers.get(socket);
+  if (!subscriber || socket.destroyed || !socket.writable) return;
+  const snapshot = getAppStatusSnapshot();
+  const result = JSON.stringify(snapshot);
+  if (result === subscriber.lastResult) return;
+  subscriber.lastResult = result;
+  if (socket.writableLength > maxIpcMessageBytes) return;
+  socket.write(`${JSON.stringify(okResponse(subscriber.requestId, snapshot))}\n`);
 }
 
 function isBenignSocketCloseError(error: NodeJS.ErrnoException): boolean {

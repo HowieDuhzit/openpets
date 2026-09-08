@@ -71,6 +71,12 @@ OpenPets desktop companion application. Tray-first Electron app providing animat
 - `pet-roaming-controller.ts`: Host-side roaming orchestrator — registers every live pet (default + agent) with the motion engine and applies the active physics configuration (gravity + bounce). Unregisters before window destroy to prevent the shared ticker from touching closed windows.
 - `pet-motion-engine.ts`: Shared-ticker motion engine (~60 fps) — `Map<petHandleId, MotionState>`, single `setInterval` for all pets, sub-pixel fractional accumulators, bottom-center gravity-floor anchor, `registerPet`/`unregisterPet` seams, sole continuous position writer.
 - `window-position.ts`: Window-position adapter — uses Electron normally and trusted Hyprland IPC in opt-in native Wayland mode, with per-window address/position caching and coalesced writes.
+- `linux-environment.ts`: Pure Linux/Omarchy runtime classifier plus bounded canonical Omarchy version detection for the read-only Integrations diagnostic.
+- `omarchy-setup.ts`: Reversible managed Omarchy setup for Hyprland rules, native-Wayland XDG/UWSM autostart, a JSONC-aware Waybar module, and a marker-owned Walker/Elephant menu with strict ownership and path safety.
+- `omarchy-context.ts`/`omarchy-context-core.ts`: Main-process Hyprland event/resync adapter and pure bounded parser for opt-in default-pet fullscreen suppression and active-monitor following on packaged Omarchy native Wayland.
+- `app-actions.ts`/`app-actions-core.ts`: Closed desktop launch-argument parser and dispatcher used by Waybar through Electron's single-instance path.
+- `app-status-events.ts`: Small status invalidation bus feeding deduplicated authenticated IPC subscribers.
+- `waybar-helper.ts`: Generates the standalone Node-mode Waybar subscriber and shell-safe fixed module commands.
 - `display.ts`: Screen-geometry helpers — `getDefaultPetInitialPosition`, `clampToVisibleWorkArea` (legacy single-display), `clampToNearestDisplayIfOffscreen` (permissive multi-display), `isOnAnyDisplay`, `setCrossDisplayRoamingEnabled`/`isCrossDisplayRoamingEnabled` flag; display list cache with `invalidateDisplayCache()`
 - `app-state.ts`: Persistent state management (JSON file)
 - `agent-setup.ts`: Claude/OpenCode/Cursor integration logic

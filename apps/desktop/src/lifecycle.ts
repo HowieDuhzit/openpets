@@ -1,19 +1,26 @@
 import { app } from "electron";
 
+import { dispatchOpenPetsDesktopAction, parseOpenPetsDesktopAction } from "./app-actions.js";
 import { closeAllAgentPets } from "./agent-pet-controller.js";
 import { destroyDefaultPet } from "./default-pet-controller.js";
 import { info } from "./logger.js";
 import { stopLocalIpcServer } from "./local-ipc.js";
 import { stopPluginService } from "./plugin-service.js";
 import { focusOpenTaskWindows } from "./windows.js";
+import { stopOmarchyContext } from "./omarchy-context.js";
 
 let intentionalQuit = false;
 let hardExitTimer: NodeJS.Timeout | null = null;
 
 export function installAppLifecycle(): void {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, commandLine) => {
     info("app", "second instance requested");
     console.log("Second OpenPets launch requested; keeping existing instance.");
+    const action = parseOpenPetsDesktopAction(commandLine);
+    if (action) {
+      dispatchOpenPetsDesktopAction(action);
+      return;
+    }
     focusOpenTaskWindows();
   });
 
@@ -35,6 +42,7 @@ export function installAppLifecycle(): void {
     scheduleHardExitFallback("before-quit");
     stopPluginService();
     stopLocalIpcServer();
+    stopOmarchyContext();
     closeAllAgentPets();
     destroyDefaultPet();
   });

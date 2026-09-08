@@ -12,6 +12,7 @@ const valid = {
 };
 
 parseIpcRequest(JSON.stringify(valid), token);
+parseIpcRequest(JSON.stringify({ ...valid, method: "status.subscribe" }), token);
 parseIpcRequest(JSON.stringify({ ...valid, method: "pets.list" }), token);
 parseIpcRequest(JSON.stringify({ ...valid, method: "pets.install-local" }), token);
 assert.throws(() => parseIpcRequest(JSON.stringify({ ...valid, token: "bad" }), token));

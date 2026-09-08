@@ -226,6 +226,19 @@ export function motionStop(petHandleId: string): void {
   if (entry.state.loop) { clearInterval(entry.state.loop); entry.state.loop = null; }
 }
 
+/** Cancel an absolute target and relocate without discarding follow or gravity configuration. */
+export function motionRelocate(petHandleId: string, accessor: WindowAccessor, position: Point): void {
+  const state = stateFor(petHandleId, accessor);
+  const window = accessor();
+  if (!window || window.isDestroyed() || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+  state.moveGeneration += 1;
+  state.moveTarget = null;
+  state.fracX = 0;
+  state.fracY = 0;
+  if (state.physics) state.physics.vy = 0;
+  setWindowPosition(window, Math.round(position.x), Math.round(position.y));
+}
+
 export function motionStopAll(): void {
   for (const petHandleId of motionStates.keys()) motionStop(petHandleId);
 }

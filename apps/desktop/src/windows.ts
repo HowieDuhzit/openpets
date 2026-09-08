@@ -1,10 +1,12 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { join, resolve, relative } from "node:path";
+import { execFile } from "node:child_process";
+import { isAbsolute, join, resolve, relative } from "node:path";
 import sharp from "sharp";
 
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell, type IpcMainInvokeEvent, type OpenDialogOptions } from "electron";
 
 import { getAgentSetupSnapshot, runAgentSetupAction, updateAgentSetupCommandPaths } from "./agent-setup.js";
+import { publishAppStatusChanged } from "./app-status-events.js";
 import { refreshAgentPetContent } from "./agent-pet-controller.js";
 import { getAppStateSnapshot, normalizePetPoolOrder, petScaleOptions, setPetPoolOrder, updatePreferences } from "./app-state.js";
 import { applyRoamingToAllPets } from "./pet-roaming-controller.js";
@@ -16,6 +18,9 @@ import { setCrossDisplayRoamingEnabled } from "./display.js";
 import { getActiveLocale, getActiveMessages, LOCALE_LABELS, SUPPORTED_LOCALES, setLocaleFromPreference, t, type Locale, type LocalePreference } from "./i18n/index.js";
 import { recoverDefaultPetMouseInterop, refreshDefaultPetContent, resetDefaultPetToInitialPosition } from "./default-pet-controller.js";
 import { getLanStatusSnapshot } from "./lan-controller.js";
+import { readOmarchyVersion } from "./linux-environment.js";
+import { getOmarchySetupStatus, runOmarchySetupAction, type OmarchySetupAction, type OmarchySetupOptions } from "./omarchy-setup.js";
+import { applyOmarchyContextPreferences, isOmarchyContextSupported } from "./omarchy-context.js";
 import { validatePreferencePatch } from "./preference-patch.js";
 import { installPet, installPetFromFolder, installPetFromZipFile, removePet, setDefaultInstalledPet } from "./pet-installation.js";
 import { assertSafePetId, getInstalledPetDir } from "./pet-paths.js";
@@ -72,7 +77,8 @@ function getPetsStateSnapshot(): { preferences: { defaultPetId: string }; pets: 
 }
 
 function getSettingsStateSnapshot(): {
-  preferences: Pick<ReturnType<typeof getAppStateSnapshot>["preferences"], "openDefaultPetOnLaunch" | "petScale" | "reactionAnimationOverrides" | "petPoolOrder" | "petPoolEnabled" | "petConfinementEnabled" | "petCrossDisplayEnabled" | "petGravityEnabled">;
+  preferences: Pick<ReturnType<typeof getAppStateSnapshot>["preferences"], "openDefaultPetOnLaunch" | "petScale" | "reactionAnimationOverrides" | "petPoolOrder" | "petPoolEnabled" | "petConfinementEnabled" | "petCrossDisplayEnabled" | "petGravityEnabled" | "hideDefaultPetOnFullscreen" | "followActiveMonitor">;
+  omarchyContextSupported: boolean;
   petScaleOptions: typeof petScaleOptions;
   /** Non-broken, non-built-in installed pets available for pool selection. */
   petPoolCandidates: ReadonlyArray<{ readonly id: string; readonly displayName: string }>;
@@ -88,7 +94,10 @@ function getSettingsStateSnapshot(): {
       petConfinementEnabled: state.preferences.petConfinementEnabled,
       petCrossDisplayEnabled: state.preferences.petCrossDisplayEnabled,
       petGravityEnabled: state.preferences.petGravityEnabled,
+      hideDefaultPetOnFullscreen: state.preferences.hideDefaultPetOnFullscreen,
+      followActiveMonitor: state.preferences.followActiveMonitor,
     },
+    omarchyContextSupported: isOmarchyContextSupported(),
     petScaleOptions,
     petPoolCandidates: state.pets.installed
       .filter((p) => !p.builtIn && !p.broken && p.id !== state.preferences.defaultPetId)
@@ -372,6 +381,7 @@ export function installInternalUiHandlers(): void {
     setCrossDisplayRoamingEnabled(state.preferences.petCrossDisplayEnabled);
     // Propagate petGravityEnabled to all live pets on every pref update.
     applyRoamingToAllPets();
+    applyOmarchyContextPreferences();
     // Propagate petPoolEnabled — despawn on disable, respawn on enable.
     if (state.preferences.petPoolEnabled !== previousPoolEnabled) {
       void import("./local-ipc.js").then(({ dispatchPoolToggle }) => dispatchPoolToggle(state.preferences.petPoolEnabled));
@@ -418,6 +428,7 @@ export function installInternalUiHandlers(): void {
 
     const state = await setDefaultInstalledPet(petId);
     refreshDefaultPetContent();
+    publishAppStatusChanged();
     recoverDefaultPetMouseInterop("default-pet-changed");
     setTimeout(() => recoverDefaultPetMouseInterop("default-pet-changed+500ms"), 500).unref?.();
     return getInternalUiWindowKindForWebContents(event.sender.id) === "control-center" ? getPetsStateSnapshot() : state;
@@ -521,6 +532,44 @@ export function installInternalUiHandlers(): void {
     assertAllowedSender(event, ["control-center"]);
     return updateAgentSetupCommandPaths(patch);
   });
+
+  ipcMain.handle("openpets:omarchy-setup-snapshot", (event) => {
+    assertAllowedSender(event, ["control-center"]);
+    return getOmarchySetupStatus(getOmarchySetupOptions());
+  });
+
+  ipcMain.handle("openpets:omarchy-setup-action", async (event, action: unknown) => {
+    assertAllowedSender(event, ["control-center"]);
+    if (action !== "install" && action !== "repair" && action !== "doctor" && action !== "remove") throw new Error("Invalid Omarchy setup action.");
+    const result = runOmarchySetupAction(action as OmarchySetupAction, getOmarchySetupOptions());
+    debug("capabilities", "Omarchy setup action", { action, ok: result.ok, changed: result.changed, state: result.status.state });
+    if (result.ok && result.changed) {
+      try {
+        await runFixedCommand("hyprctl", ["reload"]);
+        const configErrors = await runFixedCommand("hyprctl", ["configerrors"]);
+        if (configErrors.trim()) throw new Error("Hyprland reported configuration errors after applying OpenPets setup.");
+        await runFixedCommand("omarchy", ["restart", "waybar"]);
+        await runFixedCommand("omarchy", ["restart", "walker"]);
+      } catch (error) {
+        warn("capabilities", "Omarchy setup apply failed", { action, reason: error instanceof Error ? error.message : String(error) });
+        return { ...result, ok: false, message: "Configuration was saved, but Hyprland or Waybar could not reload cleanly. Run Doctor and check the app log." };
+      }
+    }
+    return result;
+  });
+}
+
+function runFixedCommand(command: "hyprctl" | "omarchy", args: readonly string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, [...args], { timeout: 5_000, maxBuffer: 64 * 1024 }, (error, stdout) => error ? reject(error) : resolve(stdout));
+  });
+}
+
+function getOmarchySetupOptions(): OmarchySetupOptions {
+  const homeDir = app.getPath("home");
+  const appImage = process.env.APPIMAGE;
+  const executablePath = typeof appImage === "string" && isAbsolute(appImage) && !/[\0\r\n]/.test(appImage) ? appImage : app.getPath("exe");
+  return { platform: process.platform, homeDir, executablePath, omarchyVersion: readOmarchyVersion(homeDir), packaged: app.isPackaged };
 }
 
 async function chooseLocalPetImportKind(owner: BrowserWindow | undefined): Promise<"zip" | "folder" | null> {

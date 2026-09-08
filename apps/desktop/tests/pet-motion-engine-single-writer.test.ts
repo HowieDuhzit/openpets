@@ -9,7 +9,7 @@
  * established in pet-motion-engine-clamp.test.ts.
  */
 import assert from "node:assert/strict";
-import { _setScreenForTesting, _setIsPetWindowDraggingForTesting, motionSetFollowCursor, motionSetPhysics, motionStop, motionMoveTo } from "../src/pet-motion-engine.js";
+import { _getPhysicsForTesting, _setScreenForTesting, _setIsPetWindowDraggingForTesting, motionRelocate, motionSetFollowCursor, motionSetPhysics, motionStop, motionMoveTo } from "../src/pet-motion-engine.js";
 import { _setScreenForTesting as setDisplayScreen, invalidateDisplayCache, setCrossDisplayRoamingEnabled } from "../src/display.js";
 
 let currentPos = { x: 500, y: 500 };
@@ -101,6 +101,23 @@ setCrossDisplayRoamingEnabled(false);
   await movePromise;
   // Should have moved via step loop
   assert.ok(currentPos.x >= 200, "position updated via step loop");
+}
+
+// ---------------------------------------------------------------------------
+// 4. Context relocation cancels an old target without clearing physics.
+// ---------------------------------------------------------------------------
+{
+  const petId = "context-relocate-test";
+  currentPos = { x: 200, y: 200 };
+  const accessor = () => mockWindow;
+  motionSetPhysics(petId, accessor, { gravity: true, bounce: 0.25 });
+  const movePromise = motionMoveTo(petId, accessor, { x: 800, y: 300 }, { durationMs: 500 });
+  motionRelocate(petId, accessor, { x: 1000, y: 400 });
+  assert.deepEqual(currentPos, { x: 1000, y: 400 }, "relocation writes the new monitor position immediately");
+  assert.equal(_getPhysicsForTesting(petId)?.gravity, true, "relocation preserves gravity configuration");
+  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  await movePromise;
+  motionStop(petId);
 }
 
 // ---------------------------------------------------------------------------

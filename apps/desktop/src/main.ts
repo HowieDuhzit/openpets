@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 
 import { getAppStateSnapshot, initializeAppState, releaseStartupInstallLock } from "./app-state.js";
+import { dispatchOpenPetsDesktopAction, parseOpenPetsDesktopAction } from "./app-actions.js";
 import { createAppIcon } from "./assets.js";
 import { setLocaleFromPreference } from "./i18n/index.js";
 import { installDefaultPetDisplayHandlers, shouldOpenDefaultPetOnLaunch, showDefaultPet } from "./default-pet-controller.js";
@@ -20,6 +21,7 @@ import { createAppTray, refreshTrayMenu } from "./tray.js";
 import { checkForGitHubReleaseUpdate } from "./update-checker.js";
 import { installInternalUiHandlers, installInternalUiProtocol } from "./windows.js";
 import { isHyprlandWindowPositioningAvailable } from "./window-position.js";
+import { startOmarchyContext } from "./omarchy-context.js";
 
 // OpenPets does not store browser passwords, cookies, or encrypted app secrets.
 // Keep Chromium/Electron from prompting for macOS Keychain or Linux keyring access
@@ -60,6 +62,7 @@ if (isLinux && !allowWayland) {
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
+const initialDesktopAction = parseOpenPetsDesktopAction(process.argv);
 
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -68,6 +71,7 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     initializeLogger();
+    installChildProcessDiagnostics();
     app.setName("OpenPets");
     if (process.platform === "win32") {
       app.setAppUserModelId("dev.openpets.app");
@@ -95,6 +99,7 @@ if (!gotSingleInstanceLock) {
     createAppTray();
     installDefaultPetDisplayHandlers();
     await startLocalIpcServer();
+    await startOmarchyContext();
     releaseStartupInstallLock();
     const roots = parseDevPluginEnv(process.env.OPENPETS_DEV_PLUGIN_ROOTS);
     const paths = parseDevPluginEnv(process.env.OPENPETS_DEV_PLUGIN_PATHS);
@@ -108,6 +113,7 @@ if (!gotSingleInstanceLock) {
     if (shouldOpenDefaultPetOnLaunch()) {
       showDefaultPet();
     }
+    if (initialDesktopAction) dispatchOpenPetsDesktopAction(initialDesktopAction);
     startLanController();
     refreshTrayMenu();
     void (async () => {
@@ -137,6 +143,25 @@ if (!gotSingleInstanceLock) {
     logError("app", "startup failed", error);
     console.error("Failed to start OpenPets desktop shell.", error);
     app.quit();
+  });
+}
+
+function installChildProcessDiagnostics(): void {
+  let gpuExitCount = 0;
+  app.on("child-process-gone", (_event, details) => {
+    const isGpu = details.type === "GPU";
+    if (isGpu) gpuExitCount += 1;
+    const fields = {
+      type: details.type,
+      reason: details.reason,
+      exitCode: details.exitCode,
+      serviceName: details.serviceName || undefined,
+      name: details.name || undefined,
+      gpuExitCount: isGpu ? gpuExitCount : undefined,
+      ozonePlatform: app.commandLine.getSwitchValue("ozone-platform") || "auto",
+      allowWayland,
+    };
+    if (isGpu || details.reason === "crashed" || details.reason === "abnormal-exit") warn("app", "child process exited", fields);
   });
 }
 

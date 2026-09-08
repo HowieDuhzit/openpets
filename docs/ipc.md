@@ -65,6 +65,7 @@ shapes before returning.
 |--------|---------|
 | `hello` | Handshake / liveness probe |
 | `status` | App + pet status snapshot |
+| `status.subscribe` | Authenticated stream of deduplicated app, pet, pause, and active-agent status changes |
 | `pets.list` | Installed pets |
 | `pets.install` | Install a catalog pet through the running app |
 | `pets.install-local` | Install a local pet from an absolute zip-file or folder path |
@@ -78,6 +79,14 @@ Client method names (`hello()`, `status()`, `listPets()`, `installPet()`,
 `react()`, `say()`, `showMedia()`) wrap these. `installLocalPet()` requires an
 absolute path and an explicit `zip`/`folder` kind. `react()`/`say()`/
 `showMedia()` accept an optional `leaseId` to target a specific pet.
+
+`status.subscribe` keeps the authenticated socket open, sends an initial status
+immediately, and then sends one line-delimited response for each distinct visible
+state change. It includes only bounded companion state such as default-pet
+visibility, pause state, and active agent count; it never includes lease IDs,
+PIDs, IPC endpoints, tokens, or speech content. The managed Omarchy Waybar helper
+is its first consumer. Socket closure is the offline signal, and slow readers do
+not receive an unbounded event queue.
 
 `pet.showMedia` renders a local image file as a transient media bubble on the
 pet — for example an image a local generation tool just produced. Params:

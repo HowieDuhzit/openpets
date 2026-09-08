@@ -27,6 +27,12 @@ Every integration follows the same contract, which is worth internalizing once:
 - **Leases route the pet.** Integrations acquire a lease on first activity,
   heartbeat it, and release on shutdown. See the lease model in [ipc.md](ipc.md).
 
+On Linux, the Integrations page also shows a read-only environment diagnostic.
+It identifies Omarchy when available and reports the effective display backend
+and pet-window positioning path. This card is diagnostic only; it does not edit
+Hyprland or Omarchy configuration. Managed setup is tracked in the
+[Omarchy integration roadmap](omarchy-integration.md).
+
 ## Pet pool: multiple agents, multiple pets
 
 By default every agent session that does not pass `--pet <id>` shares the single

@@ -70,6 +70,10 @@ export interface OpenPetsStateV1 {
      * pet (default + agent). When false (default), no gravity is applied — the
      * Walkabout plugin's per-session physics path governs gravity instead. */
     readonly petGravityEnabled: boolean;
+    /** Omarchy/native-Wayland only: temporarily hide the default pet on a fullscreen workspace. */
+    readonly hideDefaultPetOnFullscreen: boolean;
+    /** Omarchy/native-Wayland only: move the default pet to the focused monitor. */
+    readonly followActiveMonitor: boolean;
   };
   readonly pets: {
     readonly installed: readonly InstalledPetState[];
@@ -531,6 +535,8 @@ function normalizePreferences(value: Partial<OpenPetsStateV1["preferences"]>): O
     petConfinementEnabled: normalizePetConfinementEnabled(value.petConfinementEnabled, defaultState.preferences.petConfinementEnabled),
     petCrossDisplayEnabled: normalizePetCrossDisplayEnabled(value.petCrossDisplayEnabled, defaultState.preferences.petCrossDisplayEnabled),
     petGravityEnabled: normalizePetGravityEnabled(value.petGravityEnabled, defaultState.preferences.petGravityEnabled),
+    hideDefaultPetOnFullscreen: typeof value.hideDefaultPetOnFullscreen === "boolean" ? value.hideDefaultPetOnFullscreen : false,
+    followActiveMonitor: typeof value.followActiveMonitor === "boolean" ? value.followActiveMonitor : false,
   };
 }
 
@@ -609,6 +615,8 @@ function createDefaultState(): OpenPetsStateV1 {
       petConfinementEnabled: true,
       petCrossDisplayEnabled: false,
       petGravityEnabled: false,
+      hideDefaultPetOnFullscreen: false,
+      followActiveMonitor: false,
     },
     pets: {
       installed: [builtInPet],

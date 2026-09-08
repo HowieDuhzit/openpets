@@ -26,6 +26,8 @@ Docs here are the *narrative* layer on top of those maps.
   reaction→animation mapping, installation, Codex pets, motion.
 - **[lan-mode.md](lan-mode.md)** - experimental LAN office-pet mode: one
   shared default pet moves between PCs on the same network.
+- **[omarchy-integration.md](omarchy-integration.md)** - roadmap and safety
+  boundaries for native Omarchy, Hyprland, Waybar, Walker, and theme integration.
 
 ## Content & catalogs (app-facing web data)
 

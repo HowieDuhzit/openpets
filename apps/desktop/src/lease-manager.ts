@@ -274,6 +274,13 @@ export class LeaseManager {
     return result;
   }
 
+  getActiveLeaseCount(): number {
+    const now = this.#now();
+    let count = 0;
+    for (const lease of this.#leases.values()) if (lease.expiresAt > now) count += 1;
+    return count;
+  }
+
   countExplicitLeases(petId: string): number {
     let count = 0;
     for (const lease of this.#leases.values()) {

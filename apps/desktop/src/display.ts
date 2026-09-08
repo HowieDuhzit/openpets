@@ -218,7 +218,7 @@ export function clampToNearestDisplayIfOffscreen(
  * Shared primitive used by both clampToVisibleWorkArea and
  * clampToNearestDisplayIfOffscreen.
  */
-function clampIntoWorkArea(
+export function clampIntoWorkArea(
   position: Point,
   size: WindowSize,
   workArea: { x: number; y: number; width: number; height: number },
@@ -232,6 +232,10 @@ function clampIntoWorkArea(
     x: clamp(Math.round(position.x), minX, maxX),
     y: clamp(Math.round(position.y), minY, maxY),
   };
+}
+
+export function getDisplayNearestPoint(point: Point): DisplayInfo {
+  return getScreen().getDisplayNearestPoint(point);
 }
 
 export function clampToVisibleWorkArea(position: Point, size: WindowSize = defaultPetWindowSize): Point {

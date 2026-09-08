@@ -9,9 +9,9 @@ React/Tailwind source for the Control Center management UI. This renderer presen
 - **Route Shell**: In-renderer route state supports `dashboard`, `pets`, `integrations`, `plugins`, and `settings`; tray actions retarget the singleton window through route-change events.
 - **Dashboard**: Reads a narrowed dashboard snapshot for default pet preview, install/catalog counts, plugin health, update status, and activity totals.
 - **Pets**: Combines installed pets, catalog v3 pages/search, Codex imports, filters, detail panes, set-default/install/import/remove actions, and animated sprite previews.
-- **Integrations**: Card-first setup UI for Claude Code, OpenCode, Cursor, and Pi guidance, including command mode/path controls and preview/action flows.
+- **Integrations**: Card-first setup UI for Claude Code, OpenCode, Cursor, and Pi guidance, plus Linux/Omarchy backend diagnostics and packaged Omarchy Install/Repair/Doctor/Remove actions covering Hyprland, autostart, Waybar, and Walker artifacts; includes command mode/path controls and preview/action flows.
 - **Plugins**: Gallery-first plugin hub for installed/catalog/local/broken filters, catalog refresh, local load, install/update/uninstall, enable/disable, config modal, command execution, runtime/status display, and broken-state feedback.
-- **Settings**: Startup, launch-at-login, pet scale, reaction-animation mapping, update check, default-pet position reset, and pet reaction previews.
+- **Settings**: Startup, launch-at-login, pet scale, movement, reaction-animation mapping, update check, default-pet position reset, pet reaction previews, and capability-gated Omarchy fullscreen/active-monitor controls.
 - **Bridge Contract**: All data and actions go through `window.openPetsControlCenter`; page snapshots intentionally omit raw install paths and unrelated app state.
 
 ## Key Files

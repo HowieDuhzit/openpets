@@ -55,6 +55,8 @@ const api = {
   getIntegrationsState: (selectedPetId, commandMode) => ipcRenderer.invoke("openpets:agent-setup-snapshot", selectedPetId, commandMode),
   runIntegrationAction: (action, selectedPetId, commandMode) => ipcRenderer.invoke("openpets:agent-setup-action", action, selectedPetId, commandMode),
   updateIntegrationCommandPaths: (patch) => ipcRenderer.invoke("openpets:agent-setup-command-paths", patch),
+  getOmarchySetup: () => ipcRenderer.invoke("openpets:omarchy-setup-snapshot"),
+  runOmarchySetupAction: (action) => ipcRenderer.invoke("openpets:omarchy-setup-action", action),
 };
 
 contextBridge.exposeInMainWorld("openPetsControlCenter", api);

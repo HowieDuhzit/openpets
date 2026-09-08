@@ -2,11 +2,10 @@ import { Menu, shell, Tray, type MenuItemConstructorOptions } from "electron";
 
 import { getAppStateSnapshot } from "./app-state.js";
 import { createTrayIcon } from "./assets.js";
-import { hideDefaultPet, isDefaultPetVisible, setDefaultPetPaused, showDefaultPet } from "./default-pet-controller.js";
+import { getDefaultPetPaused, hideDefaultPet, isDefaultPetVisible, setDefaultPetPaused, showDefaultPet } from "./default-pet-controller.js";
 import { t } from "./i18n/index.js";
 import { quitOpenPets } from "./lifecycle.js";
 import { info, openLogsFolder } from "./logger.js";
-import { shellState, togglePaused } from "./state.js";
 import { getUpdateStatus, openUpdateReleasePage } from "./update-checker.js";
 import { openControlCenterWindow } from "./windows.js";
 
@@ -59,9 +58,9 @@ export function refreshTrayMenu(): void {
       },
     },
     {
-      label: shellState.paused ? t("tray.resumeAllPets") : t("tray.pauseAllPets"),
+      label: getDefaultPetPaused() ? t("tray.resumeAllPets") : t("tray.pauseAllPets"),
       click: () => {
-        const paused = togglePaused();
+        const paused = !getDefaultPetPaused();
         setDefaultPetPaused(paused);
         info("tray", "pause toggled", { paused });
         console.log(paused ? "OpenPets paused." : "OpenPets resumed.");

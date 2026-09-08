@@ -27,11 +27,13 @@ assert.equal(closed.length, 0, "Default release closed a temp pet.");
 
 const first = manager.acquire("snoopy");
 const second = manager.acquire("snoopy");
+assert.equal(manager.getActiveLeaseCount(), 2, "Active lease count did not include all live agent sessions.");
 assert.equal(opened.join(","), "snoopy", "Explicit pet did not open once for multiple leases.");
 manager.release(first.leaseId);
 assert.equal(closed.length, 0, "Explicit pet closed before final lease release.");
 manager.release(first.leaseId);
 manager.release(second.leaseId);
+assert.equal(manager.getActiveLeaseCount(), 0, "Active lease count did not drop after release.");
 assert.equal(closed.join(","), "snoopy", "Explicit pet did not close after final release.");
 
 const missing = manager.acquire("missing");

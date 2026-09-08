@@ -71,10 +71,25 @@ windowrule = float on, match:class open-pets-desktop
 windowrule = pin on, match:class open-pets-desktop
 ```
 
-This syntax is validated against Hyprland 0.55. After editing the config, run
+This syntax is validated against Hyprland 0.56. After editing the config, run
 `hyprctl reload` and `hyprctl configerrors`; the latter should produce no
 output. Restart OpenPets so static window rules are applied to a newly created
 pet window.
+
+Control Center → Integrations reports whether the running app is using X11,
+XWayland, or native Wayland and whether trusted Hyprland IPC positioning is
+active. Use that runtime diagnostic instead of inferring the app backend from
+`XDG_SESSION_TYPE` alone: OpenPets can intentionally use XWayland inside a
+Wayland login session.
+
+Packaged Omarchy users can install these rules from Control Center → Integrations
+instead of editing them manually. OpenPets writes the rules to a dedicated
+`~/.config/hypr/openpets.conf`, adds one marked source block to the user's
+`hyprland.conf`, and creates a native-Wayland autostart entry. Repair and removal
+operate only on marker-owned content and retain unique backups of changed files.
+The managed file uses the compatibility configuration format shipped by Omarchy
+3.8.4; future Lua-format migration must be capability-detected rather than
+silently changing existing Omarchy configurations.
 
 Keep GPU acceleration enabled when using this native Wayland path. A local
 source launch can be validated with:
@@ -104,6 +119,14 @@ placement and stacking stay compositor-controlled and autonomous movement is
 unsupported. Hyprland also retains the documented native-drag right-click
 limitation, and pinning/transparent rendering still depend on the window rules
 above.
+
+On a packaged Omarchy installation, Settings → Movement additionally offers
+disabled-by-default fullscreen hiding and active-monitor following for the
+default pet. The host listens to Hyprland events as invalidation signals and
+queries bounded monitor/workspace state after startup and compositor reloads.
+Fullscreen suppression preserves explicit user visibility, while monitor
+following restores the pet's saved position for the focused display. Lease-bound
+agent pets and plugin-spawned pets are not moved or hidden by these settings.
 
 ## Reproduction and validation notes
 

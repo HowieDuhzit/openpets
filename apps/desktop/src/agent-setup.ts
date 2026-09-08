@@ -11,6 +11,9 @@ import { doctorOpenCodeGlobalSetup, getGlobalOpenCodeConfigDir, parseOpenCodeCon
 
 import { getAppStateSnapshot, updatePreferences, type InstalledPetState, type OpenPetsStateV1 } from "./app-state.js";
 import { doctorClaudeOpenPetsMemory, installClaudeOpenPetsMemory, uninstallClaudeOpenPetsMemory, type ClaudeOpenPetsMemoryStatus } from "./claude-memory.js";
+import { classifyLinuxEnvironment, readOmarchyVersion, type LinuxEnvironmentDiagnostic } from "./linux-environment.js";
+import { debug } from "./logger.js";
+import { isHyprlandWindowPositioningAvailable } from "./window-position.js";
 
 export type AgentSetupAction = "configure" | "replace" | "remove" | "install-memory" | "doctor-hooks" | "install-hooks" | "uninstall-hooks" | "opencode-install" | "opencode-remove" | "cursor-install" | "cursor-replace" | "cursor-remove";
 export type JournalAction = "configure" | "update" | "replace" | "remove";
@@ -48,6 +51,7 @@ export interface AgentSetupSnapshot {
   readonly cursorStatus: CursorSetupStatus;
   readonly cursorPreview: CursorSetupPreview;
   readonly commandPaths: AgentSetupCommandPaths;
+  readonly linuxEnvironment?: LinuxEnvironmentDiagnostic;
   readonly busy: boolean;
   readonly lastAction?: AgentSetupActionResult;
 }
@@ -140,6 +144,14 @@ export async function getAgentSetupSnapshot(selectedPetId?: unknown, commandMode
   const memoryStatus = { ...rawMemoryStatus, claudeMdPath: formatUserPath(rawMemoryStatus.claudeMdPath) ?? rawMemoryStatus.claudeMdPath, openPetsMemoryPath: formatUserPath(rawMemoryStatus.openPetsMemoryPath) ?? rawMemoryStatus.openPetsMemoryPath };
   const opencode = await getOpenCodeSetup(commandMode, petId);
   const cursor = await getCursorSetup(commandMode, petId);
+  const linuxEnvironment = classifyLinuxEnvironment({
+    platform: process.platform,
+    env: process.env,
+    ozonePlatform: app.commandLine.getSwitchValue("ozone-platform"),
+    omarchyVersion: readOmarchyVersion(app.getPath("home")),
+    hyprlandPositioningAvailable: isHyprlandWindowPositioningAvailable(),
+  });
+  if (linuxEnvironment) debug("capabilities", "linux environment diagnostic", { ...linuxEnvironment });
 
   return {
     selectedPetId: petId,
@@ -155,6 +167,7 @@ export async function getAgentSetupSnapshot(selectedPetId?: unknown, commandMode
     cursorStatus: cursor.status,
     cursorPreview: cursor.preview,
     commandPaths: getAgentSetupCommandPaths(),
+    linuxEnvironment,
     busy: operationRunning,
     lastAction,
   };

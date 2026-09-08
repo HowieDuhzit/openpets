@@ -38,8 +38,9 @@ logger → create the tray → start the local IPC server → initialize the plu
 service (with the Electron JS host) → optionally show the default pet. Shutdown
 runs the reverse: stop the plugin service, IPC server, and pet windows on quit.
 
-Key files: `main.ts` (entry/bootstrap), `lifecycle.ts` (app events + cleanup),
-`state.ts` (shell pause flag).
+Key files: `main.ts` (entry/bootstrap) and `lifecycle.ts` (app events + cleanup).
+The default-pet controller is the single pause-state owner used by tray, IPC,
+and Waybar actions.
 
 ## Linux display backend (Ozone/Wayland)
 
@@ -71,6 +72,53 @@ The x11-forcing branch and the `OPENPETS_ALLOW_WAYLAND` opt-out are asserted by
 `check-packaging-contract.ts`, so this behavior cannot silently regress.
 Hyprland still requires the transparent/pinned window rules documented in
 [wayland.md](wayland.md#hyprland-native-wayland-setup).
+
+Control Center's Integrations page includes a read-only Linux environment card.
+It reports detected Omarchy version, compositor, effective X11/XWayland/Wayland
+backend, and whether window positioning uses Electron, trusted Hyprland IPC, or
+is unavailable. Detection reads only a bounded canonical Omarchy version marker
+and normalized runtime facts; it does not expose environment paths or modify
+compositor configuration.
+
+In a packaged Omarchy build, that card also exposes managed setup actions. The
+main process owns the filesystem operations and returns only normalized artifact
+status to the renderer. Install/Repair manage a dedicated Hyprland include, one
+marked source block, and an XDG/UWSM autostart desktop entry; Doctor is read-only,
+and Remove deletes only unambiguously OpenPets-owned content. Unsafe paths or
+unmanaged collisions are never force-replaced.
+
+Managed setup also installs an ownership-marked Waybar module and standalone
+status helper. The helper runs with `ELECTRON_RUN_AS_NODE`, reads the existing
+secured discovery contract, and holds one authenticated `status.subscribe`
+connection. Pet visibility, pause, and lease-count changes publish deduplicated
+updates; a closed socket immediately renders the module offline. Waybar clicks
+launch only three fixed desktop arguments, parsed through the single-instance
+path: open Control Center, toggle default-pet pause, or toggle default-pet
+visibility. After managed writes, the host runs fixed `hyprctl reload`,
+`hyprctl configerrors`, and `omarchy restart waybar` commands without shell
+interpolation.
+
+The same managed setup adds a user-owned Elephant menu for Walker. Omarchy's
+desktop-application provider disables XDG desktop actions by default, so OpenPets
+uses the supported `menus:openpets` provider rather than changing global Walker
+behavior. Its three entries reuse the exact allowlisted native-Wayland launch
+arguments, and successful setup changes restart Walker through the fixed Omarchy
+command surface.
+
+Supported packaged Omarchy launches also start a main-process-only Hyprland
+context adapter. It subscribes to bounded, allowlisted event notifications and
+resynchronizes only focused-monitor geometry and the active workspace's
+fullscreen flag. Two opt-in Movement settings can temporarily suppress the
+default pet during fullscreen or move it to the focused monitor. Automatic
+hiding does not alter the user's visibility preference, and monitor moves reuse
+per-monitor positions through the motion engine without clearing gravity or
+follow behavior. Agent and plugin pets are intentionally outside this first
+context-aware slice.
+
+The main process also records Electron `child-process-gone` events after logging
+initialization. GPU exits are warning-level and include a per-launch restart
+count plus the effective Ozone backend, allowing ANGLE/X11 failures to be
+distinguished from native Wayland failures without logging raw environment data.
 
 On Windows, the shell silently strips `HWND_TOPMOST` from other windows when an
 app enters fullscreen (browser video, games) and never restores it — and no
@@ -147,7 +195,8 @@ installed.
 installed pets, the default-pet config, reaction→animation overrides, onboarding
 state, locale preference, the pet pool preference (ordered pet list +
 `petPoolEnabled` toggle), and display-roaming preferences (`petConfinementEnabled`,
-`petCrossDisplayEnabled`). `app-state-core.ts` holds pure helpers (scale
+`petCrossDisplayEnabled`) plus the opt-in Omarchy default-pet fullscreen and
+active-monitor behaviors. `app-state-core.ts` holds pure helpers (scale
 options, onboarding normalization) that are testable without Electron.
 
 #### Pet pool preference
@@ -232,6 +281,9 @@ and Dashboard; `update-version.ts` does version parsing/comparison.
 sensitive data, written to `userData/logs/openpets.log`. Renderer diagnostics
 should be routed here so failures are visible in the log file, not only DevTools
 (see the logging guidance in `AGENTS.md`).
+
+`linux-environment.ts` classifies the active Linux display backend and safely
+detects an Omarchy installation for the Integrations diagnostic.
 
 ## Security model
 

@@ -53,6 +53,8 @@ const booleanKeys = [
   { key: "petConfinementEnabled", errMsg: "Invalid pet-confinement-enabled value." },
   { key: "petGravityEnabled", errMsg: "Invalid pet-gravity-enabled value." },
   { key: "petCrossDisplayEnabled", errMsg: "Invalid pet-cross-display-enabled value." },
+  { key: "hideDefaultPetOnFullscreen", errMsg: "Invalid fullscreen-hide value." },
+  { key: "followActiveMonitor", errMsg: "Invalid active-monitor-follow value." },
 ] as const;
 
 for (const { key, errMsg } of booleanKeys) {

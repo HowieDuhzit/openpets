@@ -24,7 +24,7 @@ type PetScaleOption = { label: string; value: number };
 type UserSelectableAnimationState = "idle" | "review" | "running" | "waiting" | "waving" | "jumping" | "failed";
 type ReactionAnimationOverrides = Record<string, UserSelectableAnimationState>;
 type PetPoolCandidate = { id: string; displayName: string };
-type SettingsState = { preferences: { openDefaultPetOnLaunch: boolean; locale?: "system" | string; petScale: number; reactionAnimationOverrides?: ReactionAnimationOverrides; petPoolEnabled: boolean; petPoolOrder?: readonly string[]; petConfinementEnabled: boolean; petCrossDisplayEnabled: boolean; petGravityEnabled: boolean }; petScaleOptions: PetScaleOption[]; petPoolCandidates: ReadonlyArray<PetPoolCandidate> };
+type SettingsState = { preferences: { openDefaultPetOnLaunch: boolean; locale?: "system" | string; petScale: number; reactionAnimationOverrides?: ReactionAnimationOverrides; petPoolEnabled: boolean; petPoolOrder?: readonly string[]; petConfinementEnabled: boolean; petCrossDisplayEnabled: boolean; petGravityEnabled: boolean; hideDefaultPetOnFullscreen: boolean; followActiveMonitor: boolean }; omarchyContextSupported: boolean; petScaleOptions: PetScaleOption[]; petPoolCandidates: ReadonlyArray<PetPoolCandidate> };
 type LaunchAtLoginState = { supported: boolean; enabled: boolean };
 type LanTopologyIssue = { code: "self_reference" | "missing_reverse"; host: string; edge: "left" | "right" | "up" | "down"; neighbor: string };
 type LanStatusSnapshot = { mode: "off" | "server" | "client"; localHost: string; serverUrl: string; port: number; auth: "token" | "none"; authSource: "env" | "stored" | "generated" | "none"; authInsecure: boolean; tokenHint: string | null; topologyHosts: number; topologyLinks: number; topologyIssues: LanTopologyIssue[]; currentHost: string | null; clients: Array<{ host: string; lastSeen: number; position?: { x: number; y: number } }>; updatedAt: number; persistedCurrentHost: string | null; persistedUpdatedAt: number | null };
@@ -111,6 +111,8 @@ type ControlCenterApi = {
   getIntegrationsState(selectedPetId?: string, commandMode?: "published" | "local" | "bundled"): Promise<AgentSetupSnapshot>;
   runIntegrationAction(action: AgentSetupAction, selectedPetId?: string, commandMode?: "published" | "local" | "bundled"): Promise<AgentSetupSnapshot>;
   updateIntegrationCommandPaths(patch: Partial<AgentSetupCommandPaths>): Promise<AgentSetupCommandPaths>;
+  getOmarchySetup(): Promise<OmarchySetupStatus>;
+  runOmarchySetupAction(action: OmarchySetupAction): Promise<OmarchySetupResult>;
 };
 
 
@@ -125,7 +127,12 @@ type CursorSetupStatus = { state: "configured" | "needs_setup" | "not_detected" 
 type CursorSetupPreview = { global: true; configPath: string; mcpEntry: Record<string, unknown>; rulesPath: string; rulesContent: string; commandMode: "published" | "local" | "bundled" };
 type AgentSetupCommandPaths = { claude: string; node: string; opencode: string };
 type AgentSetupActionResult = { ok: boolean; action: AgentSetupAction; message: string; changed: boolean };
-type AgentSetupSnapshot = { selectedPetId?: string; commandMode: "published" | "local" | "bundled"; localDevAvailable: boolean; petOptions: AgentSetupPetOption[]; preview: { displayCommand: string; mcpJson: Record<string, unknown> }; status: ClaudeCodeStatus; hookStatus: ClaudeHookDoctorResult; memoryStatus: ClaudeOpenPetsMemoryStatus; opencodeStatus: OpenCodeSetupStatus; opencodePreview: OpenCodeSetupPreview; cursorStatus: CursorSetupStatus; cursorPreview: CursorSetupPreview; commandPaths: AgentSetupCommandPaths; busy: boolean; lastAction?: AgentSetupActionResult };
+type LinuxEnvironmentDiagnostic = { environment: "omarchy" | "linux"; omarchyVersion?: string; compositor: "hyprland" | "other" | "unknown"; sessionType: "x11" | "wayland" | "unknown"; displayBackend: "x11" | "xwayland" | "wayland" | "unknown"; ozonePlatform: "x11" | "wayland" | "auto"; positioning: "electron" | "hyprland-ipc" | "unsupported"; state: "ready" | "attention"; issue?: "native-wayland-positioning-unsupported" };
+type OmarchySetupAction = "install" | "repair" | "doctor" | "remove";
+type OmarchyArtifactStatus = { state: "missing" | "installed" | "needs_repair" | "conflict" | "error"; label: string };
+type OmarchySetupStatus = { state: "unsupported" | "not_installed" | "installed" | "needs_repair" | "conflict" | "error"; message: string; artifacts: { hyprlandRules: OmarchyArtifactStatus; hyprlandSource: OmarchyArtifactStatus; autostart: OmarchyArtifactStatus; waybarConfig: OmarchyArtifactStatus; waybarHelper: OmarchyArtifactStatus; walkerMenu: OmarchyArtifactStatus }; canInstall: boolean; canRepair: boolean; canRemove: boolean };
+type OmarchySetupResult = { ok: boolean; changed: boolean; action: OmarchySetupAction; message: string; status: OmarchySetupStatus };
+type AgentSetupSnapshot = { selectedPetId?: string; commandMode: "published" | "local" | "bundled"; localDevAvailable: boolean; petOptions: AgentSetupPetOption[]; preview: { displayCommand: string; mcpJson: Record<string, unknown> }; status: ClaudeCodeStatus; hookStatus: ClaudeHookDoctorResult; memoryStatus: ClaudeOpenPetsMemoryStatus; opencodeStatus: OpenCodeSetupStatus; opencodePreview: OpenCodeSetupPreview; cursorStatus: CursorSetupStatus; cursorPreview: CursorSetupPreview; commandPaths: AgentSetupCommandPaths; linuxEnvironment?: LinuxEnvironmentDiagnostic; busy: boolean; lastAction?: AgentSetupActionResult };
 type StatusTone = keyof typeof statusPillToneClass;
 
 const api = (window as unknown as { openPetsControlCenter: ControlCenterApi }).openPetsControlCenter;
@@ -1281,6 +1288,26 @@ function SettingsView() {
                   testId="setting-pet-gravity-toggle"
                   onChange={(checked) => patchPreferences({ petGravityEnabled: checked }, t("settings.toast.gravitySaved"))}
                 />
+                {settings?.omarchyContextSupported && (
+                  <ToggleRow
+                    title={t("settings.omarchyFullscreen.label")}
+                    description={t("settings.omarchyFullscreen.description")}
+                    checked={settings.preferences.hideDefaultPetOnFullscreen}
+                    disabled={!!busy}
+                    testId="setting-omarchy-fullscreen-toggle"
+                    onChange={(checked) => patchPreferences({ hideDefaultPetOnFullscreen: checked }, t("settings.toast.omarchyContextSaved"))}
+                  />
+                )}
+                {settings?.omarchyContextSupported && (
+                  <ToggleRow
+                    title={t("settings.omarchyMonitor.label")}
+                    description={t("settings.omarchyMonitor.description")}
+                    checked={settings.preferences.followActiveMonitor}
+                    disabled={!!busy}
+                    testId="setting-omarchy-monitor-toggle"
+                    onChange={(checked) => patchPreferences({ followActiveMonitor: checked }, t("settings.toast.omarchyContextSaved"))}
+                  />
+                )}
               </div>
             </div>
           </>
@@ -2040,9 +2067,24 @@ function cursorStatusTone(state: CursorSetupStatus["state"]): StatusTone {
   return "slate";
 }
 
+function linuxEnvironmentDescription(environment: LinuxEnvironmentDiagnostic, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const platform = environment.environment === "omarchy"
+    ? t("integrations.environment.omarchy", { version: environment.omarchyVersion ?? "" })
+    : t("integrations.environment.linux");
+  const compositor = environment.compositor === "hyprland" ? "Hyprland" : t("integrations.environment.desktop");
+  const backend = environment.displayBackend === "xwayland" ? "XWayland" : environment.displayBackend === "wayland" ? "Wayland" : environment.displayBackend === "x11" ? "X11" : t("integrations.environment.unknown");
+  const positioning = environment.positioning === "hyprland-ipc"
+    ? t("integrations.environment.positioning.hyprland")
+    : environment.positioning === "electron"
+      ? t("integrations.environment.positioning.electron")
+      : t("integrations.environment.positioning.unsupported");
+  return `${platform} · ${compositor} · ${backend}. ${positioning}`;
+}
+
 function IntegrationsView() {
   const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<AgentSetupSnapshot | null>(null);
+  const [omarchySetup, setOmarchySetup] = useState<OmarchySetupStatus | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -2052,8 +2094,9 @@ function IntegrationsView() {
     try {
       const petId = selectedPetId === undefined ? snapshot?.selectedPetId : selectedPetId;
       const mode = commandMode === undefined ? snapshot?.commandMode : commandMode;
-      const next = await api.getIntegrationsState(petId, mode);
+      const [next, nextOmarchySetup] = await Promise.all([api.getIntegrationsState(petId, mode), api.getOmarchySetup()]);
       setSnapshot(next);
+      setOmarchySetup(nextOmarchySetup);
       setError("");
     } catch (err) {
       setError(String((err as Error)?.message ?? err));
@@ -2079,6 +2122,22 @@ function IntegrationsView() {
         if (next.lastAction.ok) setMessage(next.lastAction.message);
         else setError(next.lastAction.message);
       }
+    } catch (err) {
+      setError(String((err as Error)?.message ?? err));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const runOmarchy = async (label: string, action: OmarchySetupAction) => {
+    try {
+      setBusy(label);
+      setError("");
+      setMessage("");
+      const result = await api.runOmarchySetupAction(action);
+      setOmarchySetup(result.status);
+      if (result.ok) setMessage(result.message);
+      else setError(result.message);
     } catch (err) {
       setError(String((err as Error)?.message ?? err));
     } finally {
@@ -2128,7 +2187,7 @@ function IntegrationsView() {
     { name: t("integrations.soon.zed"), icon: "zed" },
   ];
 
-  const selectedIntegrationName = selectedId === "pi" ? t("integrations.pi.name") : integrations.find((item) => item.id === selectedId)?.name;
+  const selectedIntegrationName = selectedId === "pi" ? t("integrations.pi.name") : selectedId === "omarchy" ? t("integrations.environment.name.omarchy") : integrations.find((item) => item.id === selectedId)?.name;
 
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2">
@@ -2136,6 +2195,27 @@ function IntegrationsView() {
       {message && <div className="settings-success settings-message">{message}</div>}
 
       <div className="integration-grid">
+        {snapshot.linuxEnvironment && (
+          <article className="integration-card">
+            <div className="plugin-card-body">
+              <div className="integration-icon">
+                <IntegrationIcon id="environment" />
+              </div>
+              <div className="plugin-card-content">
+                <div className="flex items-center justify-between gap-3">
+                  <strong>{snapshot.linuxEnvironment.environment === "omarchy" ? t("integrations.environment.name.omarchy") : t("integrations.environment.name.linux")}</strong>
+                  <StatusPill tone={snapshot.linuxEnvironment.state === "ready" ? "green" : "orange"}>{snapshot.linuxEnvironment.state === "ready" ? t("integrations.environment.ready") : t("integrations.environment.attention")}</StatusPill>
+                </div>
+                <small>{linuxEnvironmentDescription(snapshot.linuxEnvironment, t)}</small>
+              </div>
+            </div>
+            {snapshot.linuxEnvironment.environment === "omarchy" && omarchySetup && (
+              <div className="plugin-card-footer">
+                <Button variant="secondary" size="compact" icon={<ConfigureIcon />} fullWidth onClick={() => setSelectedId("omarchy")}>{t("integrations.environment.manage")}</Button>
+              </div>
+            )}
+          </article>
+        )}
         {integrations.map((item) => (
           <article key={item.id} className={`integration-card ${selectedId === item.id ? "border-brand ring-4 ring-brand/15" : ""}`}>
             <div className="plugin-card-body">
@@ -2197,7 +2277,7 @@ function IntegrationsView() {
             </div>
 
             <div className="flex flex-col gap-5 mt-4">
-              {selectedId !== "pi" && (
+              {selectedId !== "pi" && selectedId !== "omarchy" && (
                 <section className="plugin-section">
                   <div className="plugin-section-title"><small>{t("integrations.commandSource")}</small><strong>{t("integrations.cliMode")}</strong></div>
                   <select className="settings-select w-full" value={snapshot.commandMode} disabled={isBusy} onChange={(event) => changeCommandMode(event.target.value as AgentSetupSnapshot["commandMode"])}>
@@ -2207,6 +2287,43 @@ function IntegrationsView() {
                   </select>
                   <p className="text-xs text-slatecopy mt-2">{t("integrations.commandModeHelp")}</p>
                 </section>
+              )}
+
+              {selectedId === "omarchy" && omarchySetup && (
+                <>
+                  <section className="plugin-section">
+                    <div className="plugin-section-title"><small>{t("integrations.environment.setup")}</small><strong>{t("integrations.environment.managedSetup")}</strong></div>
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-blue-50/50 border border-blue-100/50">
+                      <small className="text-xs text-slatecopy">{omarchySetup.message}</small>
+                      <StatusPill tone={omarchySetup.state === "installed" ? "green" : omarchySetup.state === "needs_repair" ? "orange" : omarchySetup.state === "conflict" || omarchySetup.state === "error" ? "red" : "blue"}>{t(`integrations.environment.setupState.${omarchySetup.state}`)}</StatusPill>
+                    </div>
+                  </section>
+                  <section className="plugin-section">
+                    <div className="plugin-section-title"><small>{t("integrations.environment.artifacts")}</small><strong>{t("integrations.environment.files")}</strong></div>
+                    {([
+                      [t("integrations.environment.hyprlandRules"), omarchySetup.artifacts.hyprlandRules],
+                      [t("integrations.environment.hyprlandSource"), omarchySetup.artifacts.hyprlandSource],
+                      [t("integrations.environment.autostart"), omarchySetup.artifacts.autostart],
+                      [t("integrations.environment.waybarConfig"), omarchySetup.artifacts.waybarConfig],
+                      [t("integrations.environment.waybarHelper"), omarchySetup.artifacts.waybarHelper],
+                      [t("integrations.environment.walkerMenu"), omarchySetup.artifacts.walkerMenu],
+                    ] as const).map(([label, artifact]) => (
+                      <div key={label} className="flex items-center justify-between gap-3 py-2 border-b border-blue-100/50 last:border-0">
+                        <span className="text-sm font-semibold text-navy">{label}</span>
+                        <StatusPill tone={artifact.state === "installed" ? "green" : artifact.state === "needs_repair" ? "orange" : artifact.state === "conflict" || artifact.state === "error" ? "red" : "slate"}>{t(`integrations.environment.artifactState.${artifact.state}`)}</StatusPill>
+                      </div>
+                    ))}
+                  </section>
+                  <section className="plugin-section">
+                    <div className="plugin-section-title"><small>{t("integrations.actions")}</small><strong>{t("integrations.management")}</strong></div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {omarchySetup.canInstall && <Button variant="primary" icon={<InstallIcon />} disabled={isBusy} onClick={() => runOmarchy(t("integrations.busy.installing"), "install")}>{t("integrations.install")}</Button>}
+                      {omarchySetup.canRepair && <Button variant="warning" icon={<ReplaceIcon />} disabled={isBusy} onClick={() => runOmarchy(t("integrations.environment.repairing"), "repair")}>{t("integrations.environment.repair")}</Button>}
+                      {omarchySetup.canRemove && <Button variant="danger" icon={<RemoveIcon />} disabled={isBusy} onClick={() => runOmarchy(t("integrations.busy.removing"), "remove")}>{t("integrations.environment.remove")}</Button>}
+                      <Button variant="secondary" icon={<RefreshIcon />} disabled={isBusy} onClick={() => runOmarchy(t("integrations.environment.doctoring"), "doctor")}>{t("integrations.environment.doctor")}</Button>
+                    </div>
+                  </section>
+                </>
               )}
 
               {selectedId === "claude" && (

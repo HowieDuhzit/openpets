@@ -1,9 +1,10 @@
 import { BrowserWindow, powerMonitor, screen, shell, type Display } from "electron";
 
 import { getAppStateSnapshot, getDefaultPetPosition, getPerMonitorPetPosition, resetDefaultPetPosition, setDefaultPetPosition, setPerMonitorPetPosition, updatePreferences } from "./app-state.js";
+import { publishAppStatusChanged } from "./app-status-events.js";
 import { shouldShowDefaultPetForExternalEvent } from "./app-state-core.js";
-import { defaultPetWindowSize, getAllDisplayKeys, getDefaultPetInitialPosition, getDisplayKey, getDisplayKeyForPosition, invalidateDisplayCache, type Point } from "./display.js";
-import { motionMoveTo } from "./pet-motion-engine.js";
+import { clampIntoWorkArea, defaultPetWindowSize, getAllDisplayKeys, getDefaultPetInitialPosition, getDisplayKey, getDisplayKeyForPosition, getDisplayNearestPoint, invalidateDisplayCache, type Point } from "./display.js";
+import { motionMoveTo, motionRelocate } from "./pet-motion-engine.js";
 import { registerRoamingPet } from "./pet-roaming-controller.js";
 import { debug, info } from "./logger.js";
 import { transientDisplayMs, type OpenPetsReaction } from "./local-ipc-protocol.js";
@@ -13,6 +14,7 @@ import { publishPluginPetEvent } from "./plugin-events-source.js";
 import { reclampAgentPetWindows } from "./agent-pet-controller.js";
 import { reclampPluginPetWindows } from "./plugin-pet-registry.js";
 import { setWindowPosition } from "./window-position.js";
+import { shouldShowDefaultPetInContext } from "./omarchy-context-core.js";
 
 let defaultPetWindow: BrowserWindow | null = null;
 let paused = false;
@@ -27,6 +29,7 @@ const maxPluginMoveDistance = 160;
 const minPluginMoveDurationMs = 250;
 const maxPluginMoveDurationMs = 1_500;
 let movementInProgress = false;
+let contextSuppressed = false;
 
 export type PetMoveOptions = { readonly x: number; readonly y: number; readonly durationMs?: number };
 export type PetWanderOptions = { readonly distance?: number; readonly durationMs?: number };
@@ -65,6 +68,10 @@ export function showDefaultPetForLan(): void {
 }
 
 function showDefaultPetWindow(source: "user" | "external-event"): void {
+  if (contextSuppressed) {
+    debug("pet.default", "show deferred", { source, reason: "fullscreen" });
+    return;
+  }
   const window = getOrCreateDefaultPetWindow();
   info("pet.default", "show requested", { source, windowId: window.id, visible: window.isVisible(), minimized: window.isMinimized(), paused, petId: getAppStateSnapshot().preferences.defaultPetId });
 
@@ -74,6 +81,32 @@ function showDefaultPetWindow(source: "user" | "external-event"): void {
 
   window.showInactive();
   registerRoamingPet("default", getDefaultPetWindowForPlugins);
+  publishAppStatusChanged();
+}
+
+export function applyDefaultPetContext(suppressed: boolean): void {
+  if (contextSuppressed === suppressed) return;
+  contextSuppressed = suppressed;
+  info("pet.default", "context visibility changed", { suppressed });
+  if (suppressed) hideDefaultPetWindow();
+  else if (shouldShowDefaultPetInContext(getAppStateSnapshot().preferences.openDefaultPetOnLaunch, contextSuppressed)) showDefaultPetWindow("external-event");
+}
+
+export function moveDefaultPetToMonitor(point: Point): void {
+  if (!defaultPetWindow || defaultPetWindow.isDestroyed()) return;
+  const display = getDisplayNearestPoint(point);
+  const displayKey = getDisplayKey(display.bounds);
+  const current = readWindowPosition(defaultPetWindow);
+  if (getDisplayKeyForPosition(current) === displayKey) return;
+  const saved = getPerMonitorPetPosition(displayKey);
+  handlePositionChanged(current);
+  const target = clampIntoWorkArea(saved ?? {
+    x: display.workArea.x + display.workArea.width - defaultPetWindowSize.width - 24,
+    y: display.workArea.y + display.workArea.height - defaultPetWindowSize.height - 24,
+  }, defaultPetWindowSize, display.workArea);
+  motionRelocate("default", getDefaultPetWindowForPlugins, target);
+  handlePositionChanged(target);
+  info("pet.default", "followed active monitor", { displayKey, restored: Boolean(saved) });
 }
 
 export function hideDefaultPet(): void {
@@ -98,6 +131,7 @@ function hideDefaultPetWindow(): void {
   info("pet.default", "hide requested", { windowId: defaultPetWindow.id, position: hidePosition, petId: getAppStateSnapshot().preferences.defaultPetId });
   handlePositionChanged(hidePosition);
   defaultPetWindow.hide();
+  publishAppStatusChanged();
 }
 
 export function getDefaultPetLanPosition(): { readonly x: number; readonly y: number } | null {
@@ -110,8 +144,10 @@ export function isDefaultPetVisible(): boolean {
 }
 
 export function setDefaultPetPaused(nextPaused: boolean): void {
+  if (paused === nextPaused) return;
   paused = nextPaused;
   info("pet.default", "pause changed", { paused });
+  publishAppStatusChanged();
 
   if (!defaultPetWindow || defaultPetWindow.isDestroyed()) {
     return;
@@ -232,6 +268,7 @@ export function destroyDefaultPet(): void {
   handlePositionChanged(destroyPosition);
   const window = defaultPetWindow;
   defaultPetWindow = null;
+  contextSuppressed = false;
   window.setIgnoreMouseEvents(false);
   window.destroy();
 }
@@ -312,6 +349,7 @@ function getOrCreateDefaultPetWindow(): BrowserWindow {
   defaultPetWindow.on("closed", () => {
     info("pet.default", "closed", { windowId });
     defaultPetWindow = null;
+    publishAppStatusChanged();
   });
 
   return defaultPetWindow;

@@ -168,10 +168,15 @@ main.ts/settings → i18n.setLocaleFromPreference(system/user locale)
 **Core**:
 - `main.ts`: Entry, single-instance lock, bootstrap sequence, JavaScript plugin host construction
 - `lifecycle.ts`: App event handlers (quit, window-all-closed, second-instance) with logging; stops plugin service, IPC, and pet windows on quit
-- `state.ts`: Simple shell pause state
 - `app-state.ts`: Persistent JSON state with V1 schema, atomic writes, reaction animation overrides
 - `app-state-core.ts`: Pet scale options, onboarding normalization
 - `logger.ts`: Structured logging with scopes (app, ipc, lease, pet.default, pet.agent, pet.window, state, tray, ui), log rotation, redaction
+- `linux-environment.ts`: Pure effective-backend/positioning diagnostic with bounded Omarchy version-marker detection.
+- `omarchy-setup.ts`: Atomic, marker-owned Omarchy Install/Repair/Doctor/Remove service for Hyprland rules, native-Wayland autostart, Waybar status, and Walker controls.
+- `omarchy-context.ts`/`omarchy-context-core.ts`: Bounded, reconnecting Hyprland context adapter plus pure parser; drives opt-in default-pet fullscreen suppression and focused-monitor relocation without exposing compositor data to renderers or plugins.
+- `app-actions-core.ts`/`app-actions.ts`: Pure fixed-argument parsing plus trusted host dispatch for Control Center, pause, and visibility actions.
+- `app-status-events.ts`: Internal status-change signal used to update authenticated IPC subscribers without polling.
+- `waybar-helper.ts`: Standalone managed Waybar status subscriber generator and command quoting boundary.
 
 **UI**:
 - `tray.ts`: Tray icon (nativeImage), context menu builder, update status integration, route-targeted Control Center entries, logs folder
@@ -247,7 +252,7 @@ main.ts/settings → i18n.setLocaleFromPreference(system/user locale)
 - `plugin-voice.ts`: Voice/TTS and one-shot listen facade gated by settings and permissions.
 
 **Agent Integration**:
-- `agent-setup.ts`: Claude/OpenCode/Cursor detection, MCP configuration, hooks management, action journaling
+- `agent-setup.ts`: Claude/OpenCode/Cursor detection, MCP configuration, hooks management, action journaling, and the read-only Linux/Omarchy environment snapshot.
 - `claude-memory.ts`: Claude instructions file management (`~/.claude/openpets.md`)
 - `update-checker.ts`: GitHub release polling, update status
 - `update-version.ts`: Version parsing and comparison
